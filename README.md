@@ -30,7 +30,7 @@ A secure, cross-platform password manager built with Go and Fyne. PassPort provi
 The easiest way to install PassPort on Windows is using the Windows Package Manager:
 
 ```cmd
-winget install PassPort
+winget install Buct0r.PassPort
 ```
 
 #### Manual Installation
