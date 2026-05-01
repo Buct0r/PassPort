@@ -1,0 +1,137 @@
+version: 2
+
+project_name: PassPort
+
+before:
+  hooks:
+    - go mod download
+    - go mod tidy
+
+builds:
+  # GUI builds
+  - id: gui-windows-amd64
+    main: ./src
+    binary: PassPort
+    goos:
+      - windows
+    goarch:
+      - amd64
+    env:
+      - CGO_ENABLED=1
+      - CC=x86_64-w64-mingw32-gcc
+      - CXX=x86_64-w64-mingw32-g++
+    ldflags:
+      - -H windowsgui
+
+  - id: gui-linux-amd64
+    main: ./src
+    binary: PassPort
+    goos:
+      - linux
+    goarch:
+      - amd64
+    env:
+      - CGO_ENABLED=1
+
+  # CLI builds
+  - id: cli-windows-amd64
+    main: ./cli
+    binary: PassPort-cli
+    goos:
+      - windows
+    goarch:
+      - amd64
+    env:
+      - CGO_ENABLED=0
+
+  - id: cli-windows-arm64
+    main: ./cli
+    binary: PassPort-cli
+    goos:
+      - windows
+    goarch:
+      - arm64
+    env:
+      - CGO_ENABLED=0
+
+  - id: cli-linux-amd64
+    main: ./cli
+    binary: PassPort-cli
+    goos:
+      - linux
+    goarch:
+      - amd64
+    env:
+      - CGO_ENABLED=0
+
+  - id: cli-linux-arm64
+    main: ./cli
+    binary: PassPort-cli
+    goos:
+      - linux
+    goarch:
+      - arm64
+    env:
+      - CGO_ENABLED=0
+
+archives:
+  - id: gui-windows
+    builds:
+      - gui-windows-amd64
+    name_template: "{{ .ProjectName }}-gui-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+    format: zip
+    files:
+      - none*
+
+  - id: gui-unix
+    builds:
+      - gui-linux-amd64
+    name_template: "{{ .ProjectName }}-gui-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+    format: tar.gz
+    files:
+      - none*
+
+  - id: cli-windows
+    builds:
+      - cli-windows-amd64
+      - cli-windows-arm64
+    name_template: "{{ .ProjectName }}-cli-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+    format: zip
+    files:
+      - none*
+
+  - id: cli-unix
+    builds:
+      - cli-linux-amd64
+      - cli-linux-arm64
+    name_template: "{{ .ProjectName }}-cli-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+    format: tar.gz
+    files:
+      - none*
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+snapshot:
+  name_template: "{{ .Version }}-SNAPSHOT-{{ .ShortCommit }}"
+
+changelog:
+  sort: asc
+  use: github
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\(.+\))?!?:.+$'
+      order: 0
+    - title: Bug fixes
+      regexp: '^.*?fix(\(.+\))?!?:.+$'
+      order: 1
+    - title: Others
+      order: 999
+
+release:
+  github:
+    owner: Buct0r
+    name: PassPort
+  draft: false
+  prerelease: false

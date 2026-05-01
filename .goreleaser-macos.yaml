@@ -1,0 +1,81 @@
+version: 2
+
+project_name: PassPort
+
+before:
+  hooks:
+    - go mod download
+    - go mod tidy
+
+builds:
+  # macOS GUI builds
+  - id: gui-darwin-amd64
+    main: ./src
+    binary: PassPort
+    goos:
+      - darwin
+    goarch:
+      - amd64
+    env:
+      - CGO_ENABLED=1
+
+  - id: gui-darwin-arm64
+    main: ./src
+    binary: PassPort
+    goos:
+      - darwin
+    goarch:
+      - arm64
+    env:
+      - CGO_ENABLED=1
+
+  # macOS CLI builds
+  - id: cli-darwin-amd64
+    main: ./cli
+    binary: PassPort-cli
+    goos:
+      - darwin
+    goarch:
+      - amd64
+    env:
+      - CGO_ENABLED=0
+
+  - id: cli-darwin-arm64
+    main: ./cli
+    binary: PassPort-cli
+    goos:
+      - darwin
+    goarch:
+      - arm64
+    env:
+      - CGO_ENABLED=0
+
+archives:
+  - id: gui-macos
+    builds:
+      - gui-darwin-amd64
+      - gui-darwin-arm64
+    name_template: "{{ .ProjectName }}-gui-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+    format: tar.gz
+    files:
+      - none*
+
+  - id: cli-macos
+    builds:
+      - cli-darwin-amd64
+      - cli-darwin-arm64
+    name_template: "{{ .ProjectName }}-cli-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+    format: tar.gz
+    files:
+      - none*
+
+checksum:
+  name_template: "checksums-macos.txt"
+  algorithm: sha256
+
+release:
+  github:
+    owner: Buct0r
+    name: PassPort
+  draft: false
+  prerelease: false

@@ -1,0 +1,118 @@
+name: Homebrew Publish
+
+on:
+  release:
+    types: [published]
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v0.1.19)'
+        required: true
+        default: 'v0.1.19'
+
+permissions:
+  contents: read
+
+jobs:
+  homebrew-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${{ github.event.release.tag_name }}"
+          fi
+          VERSION="${VERSION#v}"
+          echo "VERSION=$VERSION" | tee -a $GITHUB_ENV
+
+      - name: Download checksums (Windows/Linux)
+        run: |
+          curl -sL "https://github.com/Buct0r/PassPort/releases/download/v${{ env.VERSION }}/checksums.txt" -o /tmp/checksums.txt
+          cat /tmp/checksums.txt
+
+      - name: Download checksums (macOS)
+        run: |
+          curl -sL "https://github.com/Buct0r/PassPort/releases/download/v${{ env.VERSION }}/checksums-macos.txt" -o /tmp/checksums-macos.txt
+          cat /tmp/checksums-macos.txt
+        continue-on-error: true
+
+      - name: Extract SHA256 hashes
+        run: |
+          SHA_LIN=$(grep "linux-amd64" /tmp/checksums.txt | head -1 | awk '{print $1}')
+          if [ -f /tmp/checksums-macos.txt ]; then
+            SHA_ARM=$(grep "darwin-arm64" /tmp/checksums-macos.txt | head -1 | awk '{print $1}')
+            SHA_AMD=$(grep "darwin-amd64" /tmp/checksums-macos.txt | head -1 | awk '{print $1}')
+            GUI_ARM=$(grep "PassPort-gui.*darwin-arm64" /tmp/checksums-macos.txt | head -1 | awk '{print $1}')
+            GUI_AMD=$(grep "PassPort-gui.*darwin-amd64" /tmp/checksums-macos.txt | head -1 | awk '{print $1}')
+          fi
+          # Fallback to Linux if macOS not found
+          ARM="${ARM:-$SHA_LIN}"
+          AMD="${AMD:-$SHA_LIN}"
+          GUI_ARM="${GUI_ARM:-$ARM}"
+          GUI_AMD="${GUI_AMD:-$AMD}"
+          echo "LINUX=$SHA_LIN"
+          echo "CLI_ARM64=$ARM"
+          echo "CLI_AMD64=$AMD"
+          echo "GUI_ARM64=$GUI_ARM"
+          echo "GUI_AMD64=$GUI_AMD"
+          echo "SHA_LIN=$SHA_LIN" >> $GITHUB_ENV
+          echo "SHA_ARM=$ARM" >> $GITHUB_ENV
+          echo "SHA_AMD=$AMD" >> $GITHUB_ENV
+          echo "GUI_ARM=$GUI_ARM" >> $GITHUB_ENV
+          echo "GUI_AMD=$GUI_AMD" >> $GITHUB_ENV
+
+      - name: Clone or init repo
+        run: |
+          cd /tmp
+          rm -rf homebrew-PassPort
+          mkdir -p homebrew-PassPort
+          cd homebrew-PassPort
+          git clone https://github.com/Buct0r/homebrew-PassPort.git . 2>/dev/null || {
+            echo "Initializing new repo"
+            git init
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+          }
+
+      - name: Create CLI formula
+        run: |
+          cd /tmp/homebrew-PassPort
+          mkdir -p Formula
+          VER="${{ env.VERSION }}"
+          ARM="${{ env.SHA_ARM }}"
+          AMD="${{ env.SHA_AMD }}"
+          LIN="${{ env.SHA_LIN }}"
+          
+          printf 'class Passport < Formula\n  desc "A secure password manager CLI for macOS and Linux"\n  homepage "https://github.com/Buct0r/PassPort"\n  version "%s"\n  license "MIT"\n\n  on_macos do\n    if Hardware::CPU.arm?\n      url "https://github.com/Buct0r/PassPort/releases/download/v%s/PassPort-cli-%s-darwin-arm64.tar.gz"\n      sha256 "%s"\n    else\n      url "https://github.com/Buct0r/PassPort/releases/download/v%s/PassPort-cli-%s-darwin-amd64.tar.gz"\n      sha256 "%s"\n    end\n  end\n\n  on_linux do\n    url "https://github.com/Buct0r/PassPort/releases/download/v%s/PassPort-cli-%s-linux-amd64.tar.gz"\n    sha256 "%s"\n  end\n\n  def install\n    bin.install "PassPort-cli" => "passport"\n  end\n\n  test do\n    system "#{bin}/passport", "--version"\n  end\nend\n' "$VER" "$VER" "$VER" "$ARM" "$VER" "$VER" "$AMD" "$VER" "$VER" "$LIN" > Formula/passport.rb
+          echo "=== CLI Formula ==="
+          cat Formula/passport.rb
+
+      - name: Create GUI cask
+        run: |
+          cd /tmp/homebrew-PassPort
+          mkdir -p Casks
+          VER="${{ env.VERSION }}"
+          GUI_ARM="${{ env.GUI_ARM }}"
+          GUI_AMD="${{ env.GUI_AMD }}"
+          
+          # Use ARM64 SHA as primary, with comment for AMD64
+          printf 'cask "passport-gui" do\n  version "%s"\n  sha256 :arm64 => "%s"\n\n  url "https://github.com/Buct0r/PassPort/releases/download/v%s/PassPort-gui-%s-darwin-arm64.tar.gz"\n  name "PassPort GUI"\n  desc "A secure password manager with graphical interface"\n  homepage "https://github.com/Buct0r/PassPort"\n\n  on_arm do\n    artifact "PassPort.app", target: "PassPort.app"\n  end\n\n  on_intel do\n    url "https://github.com/Buct0r/PassPort/releases/download/v%s/PassPort-gui-%s-darwin-amd64.tar.gz"\n    sha256 :intel => "%s"\n  end\n\n  app "PassPort.app"\n\n  zap trash: [\n    "~/Library/Application Support/PassPort",\n    "~/Library/Preferences/com.passport.*",\n    "~/Library/Caches/passport",\n  ]\nend\n' "$VER" "$GUI_ARM" "$VER" "$VER" "$VER" "$VER" "$GUI_AMD" > Casks/passport-gui.rb
+          echo "=== GUI Cask ==="
+          cat Casks/passport-gui.rb
+
+      - name: Commit and push
+        run: |
+          cd /tmp/homebrew-PassPort
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git status
+          git commit -m "Update PassPort to v${{ env.VERSION }}" || echo "No changes"
+          git branch -M main
+          git push https://${{ secrets.HOMEBREW_TOKEN_PASSPORT }}@github.com/Buct0r/homebrew-PassPort.git main --force

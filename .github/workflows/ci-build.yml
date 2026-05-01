@@ -1,0 +1,83 @@
+name: CI Build
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+
+jobs:
+  test-build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        go-version: ['1.26']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-dev xorg-dev libxinerama-dev libxrandr-dev libxcursor-dev
+
+      - name: Download Go modules
+        run: go mod download
+
+      - name: Verify Go modules
+        run: go mod verify
+
+      - name: Format check
+        run: |
+          if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+            echo "Go formatting issues found:"
+            gofmt -s -d .
+            exit 1
+          fi
+        if: runner.os != 'Windows'
+        shell: bash
+
+      - name: Run linter
+        continue-on-error: true
+        uses: golangci/golangci-lint-action@v4
+        with:
+          version: latest
+          args: --timeout 5m --allow-unused-comment
+
+      - name: Run tests
+        run: go test -v -race -coverprofile=coverage.out ./...
+        shell: bash
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.out
+          flags: unittests
+          name: codecov-umbrella
+
+      - name: Build GUI
+        run: go build -o PassPort ./src
+        shell: bash
+        
+      - name: Build CLI
+        run: go build -o PassPort-cli ./cli
+        shell: bash
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: passportbuilds-${{ matrix.os }}-go${{ matrix.go-version }}
+          path: |
+            PassPort*
+          retention-days: 7
