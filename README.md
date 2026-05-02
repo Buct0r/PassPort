@@ -251,7 +251,7 @@ For issues, questions, or suggestions, please open a Github issue.
 
 ## Disclaimer
 
-PassPort is provided as-is. While security has been prioritized, users should regularly review security documentation and updates. Keep your master password safe and unique.
+PassPort is provided as-is. While security has been prioritized, users should regularly review security documentation and updates. Keep your master password safe and unique. I suggest to check my other project [JSrandom](https://github.com/Buct0r/JSrandom), to generate a secure master password.
 
 ---
 
