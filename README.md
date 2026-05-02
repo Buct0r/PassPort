@@ -244,9 +244,6 @@ Contributions are welcome! Please ensure:
 - Documentation is updated
 - Cross-platform compatibility is maintained
 
-## License
-
-[Add your license information here]
 
 ## Support
 
@@ -258,6 +255,6 @@ PassPort is provided as-is. While security has been prioritized, users should re
 
 ---
 
-**Version**: 0.1  
+**Version**: 0.1.0
 **Last Updated**: April 2026  
 **Maintainer**: Buct0r
