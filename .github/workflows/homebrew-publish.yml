@@ -13,6 +13,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   homebrew-pr:
@@ -33,19 +34,41 @@ jobs:
           VERSION="${VERSION#v}"
           echo "VERSION=$VERSION" | tee -a $GITHUB_ENV
 
-      - name: Wait for all releases to complete
+      - name: Wait for both workflows to complete
         run: |
-          echo "Waiting for releases to be available..."
-          for i in {1..10}; do
-            echo "Attempt $i: Checking if releases are ready..."
-            if curl -sL "https://github.com/Buct0r/PassPort/releases/tag/v${{ env.VERSION }}" | grep -q "checksums.txt"; then
-              echo "Release is ready!"
-              sleep 10
+          echo "Waiting for both workflows to complete..."
+          for i in {1..40}; do
+            echo "Attempt $i: Checking workflow status..."
+
+            # Check Linux/Windows workflow status
+            MAIN_STATUS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              "https://api.github.com/repos/Buct0r/PassPort/actions/workflows/build-release.yml/runs?status=completed&per_page=1" \
+              | jq -r '.workflow_runs[0].conclusion // "not_found"')
+
+            # Check macOS workflow status
+            MACOS_STATUS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              "https://api.github.com/repos/Buct0r/PassPort/actions/workflows/build-release-macos.yml/runs?status=completed&per_page=1" \
+              | jq -r '.workflow_runs[0].conclusion // "not_found"')
+
+            echo "Linux/Windows: $MAIN_STATUS, macOS: $MACOS_STATUS"
+
+            if [ "$MAIN_STATUS" = "success" ] && [ "$MACOS_STATUS" = "success" ]; then
+              echo "Both workflows completed successfully!"
               break
             fi
-            echo "Release not ready yet, waiting 30 seconds..."
+
+            if [ $i -eq 40 ]; then
+              echo "ERROR: Timed out waiting for workflows"
+              exit 1
+            fi
+
+            echo "Waiting for both workflows to complete, retrying in 30 seconds..."
             sleep 30
           done
+
+          # Extra wait to ensure releases are published
+          echo "Waiting additional 60 seconds for releases to be published..."
+          sleep 60
 
       - name: Download checksums (Windows/Linux)
         run: |
