@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 )
 
@@ -238,7 +239,16 @@ func HasDesktopEnvironment() bool {
 
 func commandExec(args []string) {
 
-	filename := "./passport-cli"
+	exePath, Error := os.Executable()
+	if Error != nil {
+		fmt.Printf("Error getting executable path: %v\n", Error)
+		os.Exit(1)
+	}
+	exeDir := filepath.Dir(exePath)
+	filename := filepath.Join(exeDir, "passport-cli")
+	if runtime.GOOS == "windows" {
+		filename += ".exe"
+	}
 	cmd := exec.Command(filename, args...)
 
 	cmd.Stdout = os.Stdout

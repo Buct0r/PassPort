@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-const version = "0.1.0"
+const version = "0.1.1" //UPDATE EVERY TIME A CHANGE IS MADE TO THE CLI
 
 func main() {
 
