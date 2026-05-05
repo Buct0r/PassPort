@@ -1,17 +1,15 @@
 name: Homebrew Publish
 
 on:
-  release:
-    types: [published]
-  push:
-    tags:
-      - 'v*'
+  workflow_run:
+    workflows: ["Build and Release", "Release (macOS)"]
+    types: [completed]
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version tag (e.g., v0.1.19)'
+        description: 'Version tag (e.g., v0.1.1)'
         required: true
-        default: 'v0.1.19'
+        default: 'v0.1.1'
 
 permissions:
   contents: read
@@ -19,27 +17,70 @@ permissions:
 jobs:
   homebrew-pr:
     runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.name == 'Release (macOS)')
     steps:
       - name: Get version
         id: version
         run: |
-          if [ -n "${{ github.event.inputs.version }}" ]; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             VERSION="${{ github.event.inputs.version }}"
-          else
-            VERSION="${{ github.event.release.tag_name }}"
+          elif [ "${{ github.event_name }}" = "workflow_run" ]; then
+            VERSION="${{ github.event.workflow_run.head_branch }}"
           fi
           VERSION="${VERSION#v}"
           echo "VERSION=$VERSION" | tee -a $GITHUB_ENV
 
+      - name: Wait for all releases to complete
+        run: |
+          echo "Waiting for releases to be available..."
+          for i in {1..10}; do
+            echo "Attempt $i: Checking if releases are ready..."
+            if curl -sL "https://github.com/Buct0r/PassPort/releases/tag/v${{ env.VERSION }}" | grep -q "checksums.txt"; then
+              echo "Release is ready!"
+              sleep 10
+              break
+            fi
+            echo "Release not ready yet, waiting 30 seconds..."
+            sleep 30
+          done
+
       - name: Download checksums (Windows/Linux)
         run: |
-          curl -sL "https://github.com/Buct0r/PassPort/releases/download/v${{ env.VERSION }}/checksums.txt" -o /tmp/checksums.txt
-          cat /tmp/checksums.txt
+          for i in {1..5}; do
+            echo "Download attempt $i..."
+            curl -sL "https://github.com/Buct0r/PassPort/releases/download/v${{ env.VERSION }}/checksums.txt" -o /tmp/checksums.txt
+            if [ -s /tmp/checksums.txt ] && grep -q "linux-amd64" /tmp/checksums.txt; then
+              echo "Successfully downloaded checksums.txt"
+              cat /tmp/checksums.txt
+              break
+            fi
+            echo "checksums.txt not ready yet, retrying in 15 seconds..."
+            sleep 15
+          done
+          if [ ! -s /tmp/checksums.txt ]; then
+            echo "ERROR: Failed to download checksums.txt"
+            exit 1
+          fi
 
       - name: Download checksums (macOS)
         run: |
-          curl -sL "https://github.com/Buct0r/PassPort/releases/download/v${{ env.VERSION }}/checksums-macos.txt" -o /tmp/checksums-macos.txt
-          cat /tmp/checksums-macos.txt
+          for i in {1..5}; do
+            echo "Download attempt $i..."
+            curl -sL "https://github.com/Buct0r/PassPort/releases/download/v${{ env.VERSION }}/checksums-macos.txt" -o /tmp/checksums-macos.txt
+            if [ -s /tmp/checksums-macos.txt ] && grep -q "darwin" /tmp/checksums-macos.txt; then
+              echo "Successfully downloaded checksums-macos.txt"
+              cat /tmp/checksums-macos.txt
+              break
+            fi
+            echo "checksums-macos.txt not ready yet, retrying in 15 seconds..."
+            sleep 15
+          done
+          if [ ! -s /tmp/checksums-macos.txt ]; then
+            echo "WARNING: Failed to download checksums-macos.txt, will use Linux fallbacks"
+          fi
         continue-on-error: true
 
       - name: Extract SHA256 hashes
@@ -88,7 +129,7 @@ jobs:
           ARM="${{ env.SHA_ARM }}"
           AMD="${{ env.SHA_AMD }}"
           LIN="${{ env.SHA_LIN }}"
-          
+
           printf 'class Passport < Formula\n  desc "A secure password manager CLI for macOS and Linux"\n  homepage "https://github.com/Buct0r/PassPort"\n  version "%s"\n  license "MIT"\n\n  on_macos do\n    if Hardware::CPU.arm?\n      url "https://github.com/Buct0r/PassPort/releases/download/v%s/PassPort-cli-%s-darwin-arm64.tar.gz"\n      sha256 "%s"\n    else\n      url "https://github.com/Buct0r/PassPort/releases/download/v%s/PassPort-cli-%s-darwin-amd64.tar.gz"\n      sha256 "%s"\n    end\n  end\n\n  on_linux do\n    url "https://github.com/Buct0r/PassPort/releases/download/v%s/PassPort-cli-%s-linux-amd64.tar.gz"\n    sha256 "%s"\n  end\n\n  def install\n    bin.install "PassPort-cli" => "passport"\n  end\n\n  test do\n    system "#{bin}/passport", "--version"\n  end\nend\n' "$VER" "$VER" "$VER" "$ARM" "$VER" "$VER" "$AMD" "$VER" "$VER" "$LIN" > Formula/passport.rb
           echo "=== CLI Formula ==="
           cat Formula/passport.rb
@@ -100,7 +141,7 @@ jobs:
           VER="${{ env.VERSION }}"
           GUI_ARM="${{ env.GUI_ARM }}"
           GUI_AMD="${{ env.GUI_AMD }}"
-          
+
           # Use ARM64 SHA as primary, with comment for AMD64
           printf 'cask "passport-gui" do\n  version "%s"\n  sha256 :arm64 => "%s"\n\n  url "https://github.com/Buct0r/PassPort/releases/download/v%s/PassPort-gui-%s-darwin-arm64.tar.gz"\n  name "PassPort GUI"\n  desc "A secure password manager with graphical interface"\n  homepage "https://github.com/Buct0r/PassPort"\n\n  on_arm do\n    artifact "PassPort.app", target: "PassPort.app"\n  end\n\n  on_intel do\n    url "https://github.com/Buct0r/PassPort/releases/download/v%s/PassPort-gui-%s-darwin-amd64.tar.gz"\n    sha256 :intel => "%s"\n  end\n\n  app "PassPort.app"\n\n  zap trash: [\n    "~/Library/Application Support/PassPort",\n    "~/Library/Preferences/com.passport.*",\n    "~/Library/Caches/passport",\n  ]\nend\n' "$VER" "$GUI_ARM" "$VER" "$VER" "$VER" "$VER" "$GUI_AMD" > Casks/passport-gui.rb
           echo "=== GUI Cask ==="
