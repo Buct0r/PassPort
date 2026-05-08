@@ -144,7 +144,7 @@ jobs:
             git config user.email "github-actions[bot]@users.noreply.github.com"
           }
 
-      - name: Create CLI formula
+      - name: Create CLI-only formula
         run: |
           cd /tmp/homebrew-PassPort
           mkdir -p Formula
@@ -153,22 +153,23 @@ jobs:
           AMD="${{ env.SHA_AMD }}"
           LIN="${{ env.SHA_LIN }}"
 
-          printf 'class Passport < Formula\n  desc "A secure password manager CLI for macOS and Linux"\n  homepage "https://github.com/Buct0r/PassPort"\n  version "%s"\n  license "MIT"\n\n  on_macos do\n    if Hardware::CPU.arm?\n      url "https://github.com/Buct0r/PassPort/releases/download/v%s/PassPort-cli-%s-darwin-arm64.tar.gz"\n      sha256 "%s"\n    else\n      url "https://github.com/Buct0r/PassPort/releases/download/v%s/PassPort-cli-%s-darwin-amd64.tar.gz"\n      sha256 "%s"\n    end\n  end\n\n  on_linux do\n    url "https://github.com/Buct0r/PassPort/releases/download/v%s/PassPort-cli-%s-linux-amd64.tar.gz"\n    sha256 "%s"\n  end\n\n  def install\n    bin.install "PassPort-cli" => "passport"\n  end\n\n  test do\n    system "#{bin}/passport", "--version"\n  end\nend\n' "$VER" "$VER" "$VER" "$ARM" "$VER" "$VER" "$AMD" "$VER" "$VER" "$LIN" > Formula/passport.rb
-          echo "=== CLI Formula ==="
-          cat Formula/passport.rb
+          printf 'class PassportCli < Formula\n  desc "A secure password manager CLI for macOS and Linux"\n  homepage "https://github.com/Buct0r/PassPort"\n  version "%s"\n  license "MIT"\n\n  on_macos do\n    if Hardware::CPU.arm?\n      url "https://github.com/Buct0r/PassPort/releases/download/v%s/PassPort-cli-%s-darwin-arm64.tar.gz"\n      sha256 "%s"\n    else\n      url "https://github.com/Buct0r/PassPort/releases/download/v%s/PassPort-cli-%s-darwin-amd64.tar.gz"\n      sha256 "%s"\n    end\n  end\n\n  on_linux do\n    url "https://github.com/Buct0r/PassPort/releases/download/v%s/PassPort-cli-%s-linux-amd64.tar.gz"\n    sha256 "%s"\n  end\n\n  def install\n    bin.install "passport-cli"\n  end\n\n  test do\n    system "#{bin}/passport-cli", "--version"\n  end\nend\n' "$VER" "$VER" "$VER" "$ARM" "$VER" "$VER" "$AMD" "$VER" "$VER" "$LIN" > Formula/passport-cli.rb
+          echo "=== CLI-only Formula ==="
+          cat Formula/passport-cli.rb
 
-      - name: Create GUI cask
+      - name: Create combined formula (GUI + CLI)
         run: |
           cd /tmp/homebrew-PassPort
-          mkdir -p Casks
+          rm -rf Casks
           VER="${{ env.VERSION }}"
           GUI_ARM="${{ env.GUI_ARM }}"
           GUI_AMD="${{ env.GUI_AMD }}"
+          SHA_ARM="${{ env.SHA_ARM }}"
+          SHA_AMD="${{ env.SHA_AMD }}"
 
-          # Use ARM64 SHA as primary, with comment for AMD64
-          printf 'cask "passport-gui" do\n  version "%s"\n  sha256 :arm64 => "%s"\n\n  url "https://github.com/Buct0r/PassPort/releases/download/v%s/PassPort-gui-%s-darwin-arm64.tar.gz"\n  name "PassPort GUI"\n  desc "A secure password manager with graphical interface"\n  homepage "https://github.com/Buct0r/PassPort"\n\n  on_arm do\n    artifact "PassPort.app", target: "PassPort.app"\n  end\n\n  on_intel do\n    url "https://github.com/Buct0r/PassPort/releases/download/v%s/PassPort-gui-%s-darwin-amd64.tar.gz"\n    sha256 :intel => "%s"\n  end\n\n  app "PassPort.app"\n\n  zap trash: [\n    "~/Library/Application Support/PassPort",\n    "~/Library/Preferences/com.passport.*",\n    "~/Library/Caches/passport",\n  ]\nend\n' "$VER" "$GUI_ARM" "$VER" "$VER" "$VER" "$VER" "$GUI_AMD" > Casks/passport-gui.rb
-          echo "=== GUI Cask ==="
-          cat Casks/passport-gui.rb
+          printf 'class Passport < Formula\n  desc "A secure password manager for macOS (GUI + CLI)"\n  homepage "https://github.com/Buct0r/PassPort"\n  version "%s"\n  license "MIT"\n\n  on_macos do\n    if Hardware::CPU.arm?\n      url "https://github.com/Buct0r/PassPort/releases/download/v%s/PassPort-gui-%s-darwin-arm64.tar.gz"\n      sha256 "%s"\n\n      resource "cli" do\n        url "https://github.com/Buct0r/PassPort/releases/download/v%s/PassPort-cli-%s-darwin-arm64.tar.gz"\n        sha256 "%s"\n      end\n    else\n      url "https://github.com/Buct0r/PassPort/releases/download/v%s/PassPort-gui-%s-darwin-amd64.tar.gz"\n      sha256 "%s"\n\n      resource "cli" do\n        url "https://github.com/Buct0r/PassPort/releases/download/v%s/PassPort-cli-%s-darwin-amd64.tar.gz"\n        sha256 "%s"\n      end\n    end\n  end\n\n  def install\n    bin.install "passport"\n    resource("cli").stage { bin.install "passport-cli" }\n  end\n\n  test do\n    system "#{bin}/passport", "--version"\n  end\nend\n' "$VER" "$VER" "$VER" "$GUI_ARM" "$VER" "$VER" "$SHA_ARM" "$VER" "$VER" "$GUI_AMD" "$VER" "$VER" "$SHA_AMD" > Formula/passport.rb
+          echo "=== Combined Formula ==="
+          cat Formula/passport.rb
 
       - name: Commit and push
         run: |

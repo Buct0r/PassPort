@@ -7,6 +7,50 @@ import (
 	"fyne.io/fyne/v2/theme"
 )
 
+/*
+
+type Theme struct {
+	Theme  string                       `json:"theme"`
+	Themes map[string]map[string]string `json:"themes"`
+}
+
+func getConfig(scheme string) error {
+
+	data, err := os.ReadFile(getConfigPath())
+	if err != nil {
+		return err
+	}
+	var cfg Theme
+	if string(data) == "" {
+		if err := json.Unmarshal([]byte(scheme), &cfg); err != nil {
+			fmt.Println("Error loading config, check your JSON syntax\nerror:", err)
+		}
+	} else {
+		file, err := os.Open(getConfigPath())
+		if err != nil {
+			fmt.Println("Error opening config file") //or using default config
+		}
+
+		defer func() {
+			if err := file.Close(); err != nil {
+				fmt.Println("Error closing config file:", err)
+			}
+		}()
+
+		if err := json.NewDecoder(file).Decode(&cfg); err != nil {
+			fmt.Println("Error loading config, check your JSON syntax\nerror:", err)
+		}
+	}
+
+	selectedTheme := cfg.Themes[cfg.Theme]
+	for key, value := range selectedTheme {
+		selectedTheme[key] = value
+	}
+
+	return nil
+}
+*/
+
 type CustomTheme struct{}
 
 func (c *CustomTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) color.Color {
@@ -30,6 +74,10 @@ func (c *CustomTheme) Font(style fyne.TextStyle) fyne.Resource {
 
 func (c *CustomTheme) Size(name fyne.ThemeSizeName) float32 {
 	return theme.DefaultTheme().Size(name)
+}
+
+func (c *CustomTheme) BackgroundColor() color.Color {
+	return theme.Color(theme.ColorNameBackground)
 }
 
 type DarkTheme struct{}

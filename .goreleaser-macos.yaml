@@ -11,7 +11,7 @@ builds:
   # macOS GUI builds
   - id: gui-darwin-amd64
     main: ./src
-    binary: PassPort
+    binary: passport
     goos:
       - darwin
     goarch:
@@ -21,7 +21,7 @@ builds:
 
   - id: gui-darwin-arm64
     main: ./src
-    binary: PassPort
+    binary: passport
     goos:
       - darwin
     goarch:
@@ -32,7 +32,7 @@ builds:
   # macOS CLI builds
   - id: cli-darwin-amd64
     main: ./cli
-    binary: PassPort-cli
+    binary: passport-cli
     goos:
       - darwin
     goarch:
@@ -42,7 +42,7 @@ builds:
 
   - id: cli-darwin-arm64
     main: ./cli
-    binary: PassPort-cli
+    binary: passport-cli
     goos:
       - darwin
     goarch:

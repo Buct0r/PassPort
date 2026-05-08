@@ -114,6 +114,8 @@ func setupMasterPassword(renew bool) error {
 	}
 
 	if !bytes.Equal(password, confirmation) {
+		password = nil
+		confirmation = nil
 		return fmt.Errorf("passwords do %snot%s match", "\033[31m", "\033[0m")
 	} else {
 		fmt.Printf("%sMaster password set successfully!%s\n\n", "\033[32m", "\033[0m")
@@ -291,6 +293,10 @@ func checkPasswords() ([]Password, error) {
 		}
 	*/
 
+	if data == "" {
+		return []Password{}, fmt.Errorf("no passwords saved")
+	}
+
 	text := []byte(data)
 	if err != nil {
 		return nil, err
@@ -332,7 +338,10 @@ func searchPassword(passwords []Password) []Password {
 func deletePassword(passwords []Password) error {
 	tries := 0
 
-	authenticated, _ := AuthenticateUser()
+	authenticated, err := AuthenticateUser()
+	if err != nil {
+		return err
+	}
 	for !authenticated && tries < 2 {
 		fmt.Println("Invalid password, try again...")
 		tries++
@@ -565,11 +574,18 @@ func modifyPassword(passwords []Password) error {
 
 	tries := 0
 
-	authenticated, _ := AuthenticateUser()
+	authenticated, err := AuthenticateUser()
+	if err != nil {
+		return err
+	}
+
 	for !authenticated && tries < 2 {
 		fmt.Println("Invalid password, try again...")
 		tries++
-		authenticated, _ = AuthenticateUser()
+		authenticated, err = AuthenticateUser()
+		if err != nil {
+			return err
+		}
 	}
 	if !authenticated {
 		fmt.Println("Too many failed attempts.")
