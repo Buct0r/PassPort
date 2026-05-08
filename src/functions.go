@@ -172,6 +172,10 @@ func checkPasswords() ([]Password, error) {
 		}
 	*/
 
+	if data == "" {
+		return []Password{}, fmt.Errorf("no passwords saved")
+	}
+
 	text := []byte(data)
 	if err != nil {
 		return nil, err

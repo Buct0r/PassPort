@@ -67,11 +67,11 @@ jobs:
           name: codecov-umbrella
 
       - name: Build GUI
-        run: go build -o PassPort ./src
+        run: go build -o passport ./src
         shell: bash
         
       - name: Build CLI
-        run: go build -o PassPort-cli ./cli
+        run: go build -o passport-cli ./cli
         shell: bash
 
       - name: Upload build artifacts
@@ -79,5 +79,5 @@ jobs:
         with:
           name: passportbuilds-${{ matrix.os }}-go${{ matrix.go-version }}
           path: |
-            PassPort*
+            passport*
           retention-days: 7

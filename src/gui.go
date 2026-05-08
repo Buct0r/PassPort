@@ -40,10 +40,8 @@ func authWindow(a fyne.App, onComplete func(bool)) {
 	w := a.NewWindow("PassPort: Authentication")
 	w.Resize(fyne.NewSize(500, 800))
 
-	// Flag per tracciare se il callback è stato già eseguito
 	completed := false
 
-	// Gestisci la chiusura manuale della finestra
 	w.SetOnClosed(func() {
 		if !completed {
 			onComplete(false)
@@ -67,7 +65,6 @@ func authWindow(a fyne.App, onComplete func(bool)) {
 		passwordEntry.SetPlaceHolder("Enter Master Password")
 
 		submitButton := widget.NewButton("Submit", func() {
-			// Check if rate limiter is locked
 			if locked, remaining := guiLimiter.IsLocked(); locked {
 				seconds := int(remaining.Seconds())
 				dialog.ShowError(
@@ -126,11 +123,11 @@ func authWindow(a fyne.App, onComplete func(bool)) {
 		saveBtn := widget.NewButton("Save", func() {
 			if password.Text == "" || password.Text != confirm.Text {
 				dialog.ShowError(fmt.Errorf("Passwords do not match or are empty"), w)
+			} else if len(password.Text) < 12 {
+				dialog.ShowError(fmt.Errorf("Master password must be at least 12 characters"), w)
 			} else {
 				if err := setupMasterPasswordGUI(password.Text, confirm.Text); err != nil {
 					dialog.ShowError(fmt.Errorf("Failed to set up master password: %v", err), w)
-					completed = true
-					onComplete(false)
 					return
 				}
 				completed = true
@@ -143,7 +140,7 @@ func authWindow(a fyne.App, onComplete func(bool)) {
 			container.NewCenter(widget.NewRichTextFromMarkdown("# PassPort")),
 			container.NewStack(img),
 			container.NewCenter(widget.NewRichTextFromMarkdown("## Welcome to PassPort! It looks like this is your first time using the application. Let's set up your master password to get started.")),
-			container.NewCenter(widget.NewRichTextFromMarkdown("### Setup your master password:")),
+			container.NewCenter(widget.NewRichTextFromMarkdown("### Setup your master password: ")),
 			password,
 			confirm,
 			saveBtn,
@@ -179,6 +176,8 @@ func authenticate(password string) bool {
 		fmt.Println("authentication failed")
 		return false
 	}
+
+	bytePassword = nil
 
 	return true
 }
@@ -325,7 +324,7 @@ func gui() {
 				widget.NewButton("Close", func() {
 					modal.Hide()
 				}),
-				widget.NewLabel("PassPort v0.1.0 developed by Buct0r"), //TODO: Update at every release
+				widget.NewLabel("PassPort v0.2.0 developed by Buct0r"), //TODO: Update at every release
 			)
 			settingsButton := widget.NewButtonWithIcon("", theme.SettingsIcon(), func() {
 				modal = widget.NewModalPopUp(settingsContent, w.Canvas())
@@ -429,6 +428,7 @@ func deletePasswordGUI(passwords []Password, w fyne.Window, service string, onDe
 				a.Quit()
 			}
 		})
+		return nil
 	}
 	var passwordToDelete *Password
 	var updatedPasswords []Password
@@ -491,6 +491,7 @@ func editPasswordGUI(passwords []Password, w fyne.Window, service string, onEdit
 				a.Quit()
 			}
 		})
+		return nil
 	}
 
 	var passwordToEdit *Password
@@ -589,6 +590,7 @@ func addPasswordGUI(passwords []Password, w fyne.Window, onAdd func(), a fyne.Ap
 				a.Quit()
 			}
 		})
+		return
 	}
 
 	var newPassword Password
@@ -667,12 +669,12 @@ func setupMasterPasswordGUI(password string, confirmation string) error {
 
 	passwordN := bytes.TrimSpace([]byte(password))
 	confirmationN := bytes.TrimSpace([]byte(confirmation))
-	for len(password) < 12 {
+	if len(passwordN) < 12 {
 		return fmt.Errorf("master password must be at least 12 characters")
 	}
 
 	if !bytes.Equal(passwordN, confirmationN) {
-		return fmt.Errorf("passwords do %snot%s match", "\033[31m", "\033[0m")
+		return fmt.Errorf("passwords do not match")
 	}
 
 	for i := range confirmationN {
@@ -681,12 +683,12 @@ func setupMasterPasswordGUI(password string, confirmation string) error {
 
 	hashedPassword, err := HashPassword(passwordN)
 	if err != nil {
-		return err
+		return fmt.Errorf("Failed to hash password")
 	}
-	//filename = rand.Text()
+
 	path, err := getMasterPasswordPath()
 	if err != nil {
-		return fmt.Errorf("error determining master password path: %v", err)
+		return fmt.Errorf("Failed to determine master password path: %v", err)
 	}
 
 	return os.WriteFile(path, []byte(hashedPassword), 0600)
@@ -704,6 +706,7 @@ func editMasterPasswordGUI(w fyne.Window, onComplete func(bool), a fyne.App, sta
 				a.Quit()
 			}
 		})
+		return nil
 	}
 
 	path, err := getMasterPasswordPath()
@@ -721,7 +724,7 @@ func editMasterPasswordGUI(w fyne.Window, onComplete func(bool), a fyne.App, sta
 		saveButton := widget.NewButton("Save", func() {
 			newPassword := bytes.TrimSpace([]byte(passwordEntry.Text))
 			confirmation := bytes.TrimSpace([]byte(confirmationEntry.Text))
-			if newPassword == nil || confirmation == nil || len(newPassword) < 12 {
+			if len(newPassword) == 0 || len(confirmation) == 0 || len(newPassword) < 12 {
 				dialog.ShowInformation("Error", "Master password must be at least 12 characters", w)
 				return
 			}
@@ -742,7 +745,11 @@ func editMasterPasswordGUI(w fyne.Window, onComplete func(bool), a fyne.App, sta
 
 			//filename = rand.Text()
 
-			os.WriteFile(path, []byte(hashedPassword), 0600)
+			err = os.WriteFile(path, []byte(hashedPassword), 0600)
+			if err != nil {
+				dialog.ShowInformation("Error", "Failed to write master password", w)
+				return
+			}
 
 			onComplete(true)
 			modal.Hide()
@@ -786,7 +793,7 @@ func editMasterPasswordGUI(w fyne.Window, onComplete func(bool), a fyne.App, sta
 
 			newPassword := bytes.TrimSpace([]byte(passwordEntry.Text))
 			confirmation := bytes.TrimSpace([]byte(confirmationEntry.Text))
-			if newPassword == nil || confirmation == nil || len(newPassword) < 12 {
+			if len(newPassword) == 0 || len(confirmation) == 0 || len(newPassword) < 12 {
 				dialog.ShowInformation("Error", "Master password must be at least 12 characters", w)
 				return
 			}
@@ -807,7 +814,11 @@ func editMasterPasswordGUI(w fyne.Window, onComplete func(bool), a fyne.App, sta
 
 			//filename = rand.Text()
 
-			os.WriteFile(path, []byte(hashedPassword), 0600)
+			err = os.WriteFile(path, []byte(hashedPassword), 0600)
+			if err != nil {
+				dialog.ShowInformation("Error", "Failed to write master password", w)
+				return
+			}
 
 			jsonData, err := json.MarshalIndent(passwords, "", "  ")
 			if err != nil {
@@ -840,7 +851,6 @@ func editMasterPasswordGUI(w fyne.Window, onComplete func(bool), a fyne.App, sta
 			saveButton,
 			widget.NewButton("Close", func() {
 				modal.Hide()
-				onComplete(false)
 			}),
 		)
 

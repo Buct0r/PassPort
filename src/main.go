@@ -203,7 +203,6 @@ func main() {
 
 		if !HasDesktopEnvironment() {
 			fmt.Printf("%sError%s: no desktop environment detected, cannot run GUI mode", "\033[31m", "\033[0m")
-			exec.Command("")
 		} else {
 			hideConsole()
 			gui()

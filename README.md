@@ -50,12 +50,12 @@ winget install Buct0r.PassPort
 
 3. Build the GUI version:
    ```cmd
-   go build -o PassPort.exe ./src
-   ```
-
+   go build -o passport.exe ./src
+    ```
+    
 4. Or build the CLI version:
-   ```cmd
-   go build -o PassPort-cli.exe ./cli
+    ```cmd
+    go build -o passport-cli.exe ./cli
    ```
 
 ### Linux
@@ -76,12 +76,12 @@ winget install Buct0r.PassPort
 
 4. Build the GUI version:
    ```bash
-   go build -o PassPort ./src
-   ```
-
+   go build -o passport ./src
+    ```
+    
 5. Or build the CLI version:
-   ```bash
-   go build -o PassPort-cli ./cli
+    ```bash
+    go build -o passport-cli ./cli
    ```
 
 ### macOS
@@ -116,24 +116,24 @@ brew install PassPort --without-gui
 
 3. Build the GUI version:
    ```bash
-   go build -o PassPort ./src
-   ```
-
+   go build -o passport ./src
+    ```
+    
 4. Or build the CLI version:
-   ```bash
-   go build -o PassPort-cli ./cli
-   ```
-
+    ```bash
+    go build -o passport-cli ./cli
+    ```
+    
 5. (Optional) Move the binary to a location in your PATH:
-   ```bash
-   sudo mv PassPort /usr/local/bin/
+    ```bash
+    sudo mv passport /usr/local/bin/
    ```
 
 ## Usage
 
 ### GUI Mode
 
-1. Run `PassPort.exe`
+1. Run `passport.exe`
 2. On first launch, set up your master password
 3. Authenticate with your master password
 4. Use the graphical interface to:
@@ -144,7 +144,7 @@ brew install PassPort --without-gui
 
 ### CLI Mode
 
-1. Run `PassPort.exe --cli` or `PassPort-cli.exe`
+1. Run `passport.exe --cli` or `passport-cli.exe`
 2. Authenticate with your master password
 3. Navigate the menu to:
    - Add new passwords
@@ -229,12 +229,12 @@ Key dependencies:
 
 GUI application:
 ```bash
-go build -o PassPort ./src
+go build -o passport ./src
 ```
 
 CLI application:
 ```bash
-go build -o PassPort-cli ./cli
+go build -o passport-cli ./cli
 ```
 
 ## Contributing

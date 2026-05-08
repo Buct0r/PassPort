@@ -11,7 +11,7 @@ builds:
   # GUI builds
   - id: gui-windows-amd64
     main: ./src
-    binary: PassPort
+    binary: passport
     goos:
       - windows
     goarch:
@@ -25,7 +25,7 @@ builds:
 
   - id: gui-linux-amd64
     main: ./src
-    binary: PassPort
+    binary: passport
     goos:
       - linux
     goarch:
@@ -36,7 +36,7 @@ builds:
   # CLI builds
   - id: cli-windows-amd64
     main: ./cli
-    binary: PassPort-cli
+    binary: passport-cli
     goos:
       - windows
     goarch:
@@ -46,7 +46,7 @@ builds:
 
   - id: cli-windows-arm64
     main: ./cli
-    binary: PassPort-cli
+    binary: passport-cli
     goos:
       - windows
     goarch:
@@ -56,7 +56,7 @@ builds:
 
   - id: cli-linux-amd64
     main: ./cli
-    binary: PassPort-cli
+    binary: passport-cli
     goos:
       - linux
     goarch:
@@ -66,7 +66,7 @@ builds:
 
   - id: cli-linux-arm64
     main: ./cli
-    binary: PassPort-cli
+    binary: passport-cli
     goos:
       - linux
     goarch:
