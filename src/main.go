@@ -17,6 +17,7 @@ func main() {
 	flag.BoolVar(&v, "version", false, "Show version information")
 	flag.BoolVar(&v, "v", false, "Show version information")
 	flag.BoolVar(&cli, "cli", false, "Run in command-line interface mode")
+	flag.BoolVar(&cli, "c", false, "Run in command-line interface mode")
 	flag.BoolVar(&help, "help", false, "Show help message")
 	flag.BoolVar(&help, "h", false, "Show help message")
 	flag.Parse()

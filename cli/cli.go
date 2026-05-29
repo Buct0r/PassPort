@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-const version = "0.2.0" //TODO: UPDATE EVERY TIME A CHANGE IS MADE TO THE CLI
+const version = "0.3.0" //TODO: UPDATE EVERY TIME A CHANGE IS MADE TO THE CLI
 
 func main() {
 
@@ -16,6 +16,7 @@ func main() {
 	flag.BoolVar(&v, "version", false, "Show version information")
 	flag.BoolVar(&v, "v", false, "Show version information")
 	flag.BoolVar(&cli, "cli", false, "Run in command-line interface mode")
+	flag.BoolVar(&cli, "c", false, "Run in command-line interface mode")
 	flag.BoolVar(&help, "help", false, "Show help message")
 	flag.BoolVar(&help, "h", false, "Show help message")
 	flag.Parse()
@@ -27,7 +28,7 @@ func main() {
 		fmt.Println("PassPort CLI Help")
 		fmt.Println("Usage: ")
 		fmt.Println("  -version, -v Show version information")
-		fmt.Println("  -cli        Run in command-line interface mode")
+		fmt.Println("  -cli, -c        Run in command-line interface mode")
 		fmt.Println("  -help, -h   Show this help message")
 		return
 	} else {
@@ -59,10 +60,15 @@ func main() {
 
 		fmt.Println("Authentication successful!")
 
+		start := time.Now()
+		const sessionTimeout = 60 * time.Second
 	Loop:
-		for {
 
-			start := time.Now()
+		for {
+			if time.Since(start) > sessionTimeout {
+				fmt.Printf("%sSession expired due to inactivity.%s\n", "\033[31m", "\033[0m")
+				break
+			}
 
 			fmt.Println("Choose an option: ")
 			fmt.Println("1. Check saved passwords")
@@ -72,17 +78,16 @@ func main() {
 			fmt.Println("5. Modify password")
 			fmt.Println("6. Change master password")
 			fmt.Println("7. Exit")
-
 			var choice int
-			fmt.Scanln(&choice)
+			if _, err := fmt.Scanln(&choice); err != nil {
+				var discard string
+				fmt.Scanln(&discard)
+				fmt.Println("Invalid input. Please enter a number.")
+				continue
+			}
+
 			switch choice {
 			case 1:
-				end := time.Now()
-				elapsed := end.Sub(start)
-				if elapsed > 60*time.Second {
-					fmt.Printf("%sSession expired due to inactivity.%s\n", "\033[31m", "\033[0m")
-					break Loop
-				}
 				clearScreen()
 				//fmt.Printf("%sWaring%s: Your passwords will be displayed in plain text.\n", "\033[31m", "\033[0m")
 
@@ -132,13 +137,8 @@ func main() {
 
 					}
 				}
+				start = time.Now() // Reset session timer after activity
 			case 2:
-				end := time.Now()
-				elapsed := end.Sub(start)
-				if elapsed > 60*time.Second {
-					fmt.Printf("%sSession expired due to inactivity.%s\n", "\033[31m", "\033[0m")
-					break Loop
-				}
 				clearScreen()
 				passwords, err := checkPasswords()
 				if err != nil && err.Error() != "no passwords saved" {
@@ -152,13 +152,8 @@ func main() {
 				} else {
 					fmt.Println("Password saved successfully.")
 				}
+				start = time.Now() // Reset session timer after activity
 			case 3:
-				end := time.Now()
-				elapsed := end.Sub(start)
-				if elapsed > 60*time.Second {
-					fmt.Printf("%sSession expired due to inactivity.%s\n", "\033[31m", "\033[0m")
-					break Loop
-				}
 				clearScreen()
 				passwords, err := checkPasswords()
 				if err != nil && err.Error() != "no passwords saved" {
@@ -171,14 +166,8 @@ func main() {
 				} else {
 					fmt.Println("Password deleted successfully.")
 				}
-
+				start = time.Now() // Reset session timer after activity
 			case 4:
-				end := time.Now()
-				elapsed := end.Sub(start)
-				if elapsed > 60*time.Second {
-					fmt.Printf("%sSession expired due to inactivity.%s\n", "\033[31m", "\033[0m")
-					break Loop
-				}
 				clearScreen()
 				passwords, err := checkPasswords()
 				if err != nil && err.Error() != "no passwords saved" {
@@ -207,18 +196,45 @@ func main() {
 						fmt.Printf("\n--- Password %d ---\n", i+1)
 						fmt.Printf("Service: %s\n", found[i].Service)
 						fmt.Printf("Username: %s\n", found[i].Username)
-						fmt.Printf("Password: %s\n", found[i].Password)
+						fmt.Printf("Password: %s\n", maskPassword(found[i].Password))
 						fmt.Printf("Created: %s\n", found[i].Created)
 						fmt.Print("----------------\n\n")
 					}
+					fmt.Println("(1) Reveal Password")
+					fmt.Println("(2) Back to Main Menu")
+					var choice int
+					fmt.Scanln(&choice)
+					switch choice {
+					case 1:
+						tries := 0
+						authenticated, err := AuthenticateUser()
+						for !authenticated && tries < 2 {
+							fmt.Println("Invalid password, try again...")
+							tries++
+							authenticated, _ = AuthenticateUser()
+						}
+						if !authenticated {
+							fmt.Println("Too many failed attempts.")
+							return
+						}
+						if err != nil {
+							break
+						}
+						err = revealPassword(passwords)
+						if err != nil {
+							fmt.Printf("%sError:%s %s\n", "\033[31m", "\033[0m", err)
+						}
+					case 2:
+						continue
+					default:
+						fmt.Println("Invalid choice. Returning to main menu.")
+						continue
+
+					}
+
 				}
+				start = time.Now() // Reset session timer after activity
 			case 5:
-				end := time.Now()
-				elapsed := end.Sub(start)
-				if elapsed > 60*time.Second {
-					fmt.Printf("%sSession expired due to inactivity.%s\n", "\033[31m", "\033[0m")
-					break Loop
-				}
 				clearScreen()
 				passwords, err := checkPasswords()
 				if err != nil && err.Error() != "no passwords saved" {
@@ -231,14 +247,8 @@ func main() {
 				} else {
 					fmt.Println("Password modified successfully.")
 				}
-
+				start = time.Now() // Reset session timer after activity
 			case 6:
-				end := time.Now()
-				elapsed := end.Sub(start)
-				if elapsed > 60*time.Second {
-					fmt.Printf("%sSession expired due to inactivity.%s\n", "\033[31m", "\033[0m")
-					break Loop
-				}
 				clearScreen()
 				err := changeMasterPassword()
 				if err != nil {
@@ -246,13 +256,15 @@ func main() {
 				} else {
 					fmt.Println("Master password changed successfully.")
 				}
-
+				start = time.Now() // Reset session timer after activity
 			case 7:
 				clearScreen()
 				fmt.Println("Exiting...")
+				start = time.Now() // Reset session timer after activity
 				return
 			default:
 				clearScreen()
+				start = time.Now() // Reset session timer after activity
 				fmt.Println("Invalid choice. Please try again.")
 			}
 

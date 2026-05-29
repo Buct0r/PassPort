@@ -20,38 +20,26 @@ func encryptData(filename string, key string, text string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
+	defer zeroBytes(chKeyHex)
+
 	chKey, err := hex.DecodeString(string(chKeyHex))
+
+	defer zeroBytes(chKey)
+
 	if err != nil {
 		return "", fmt.Errorf("invalid key format")
 	}
-	// master.key contains: salt (16 bytes) + hash (32 bytes) = 48 bytes total
+
 	if len(chKey) != 48 {
 		return "", fmt.Errorf("invalid key size: expected 48 bytes from master.key, got %d", len(chKey))
 	}
-	// Use only the hash part (last 32 bytes) as AES key
-	chKey = chKey[16:48]
 
-	/*
-		chKey, err := os.ReadFile(key)
-		if err != nil {
-			return "", err
-		}
+	aesKey := make([]byte, 32)
+	copy(aesKey, chKey[16:48])
+	defer zeroBytes(aesKey)
 
-		chKey = chKey[:32]
-	*/
-
-	/*
-		if FileExists(filename) {
-			data, err := os.ReadFile(filename)
-			if err != nil {
-				return "", err
-			}
-			text += string(data)
-		}
-	*/
-	//fmt.Println(text)
-
-	block, err := aes.NewCipher(chKey)
+	block, err := aes.NewCipher(aesKey)
 	if err != nil {
 		return "", err
 	}
@@ -81,16 +69,22 @@ func decryptData(key string, passowrds string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
+	defer zeroBytes(chKeyHex)
+
 	chKey, err := hex.DecodeString(string(chKeyHex))
 	if err != nil {
 		return "", fmt.Errorf("invalid key format")
 	}
+	defer zeroBytes(chKey)
 	// master.key contains: salt (16 bytes) + hash (32 bytes) = 48 bytes total
 	if len(chKey) != 48 {
 		return "", fmt.Errorf("invalid key size: expected 48 bytes from master.key, got %d", len(chKey))
 	}
 	// Use only the hash part (last 32 bytes) as AES key
-	chKey = chKey[16:48]
+	aesKey := make([]byte, 32)
+	copy(aesKey, chKey[16:48])
+	defer zeroBytes(aesKey)
 
 	/*
 		chKey, err := os.ReadFile(key)
@@ -114,7 +108,7 @@ func decryptData(key string, passowrds string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	block, err := aes.NewCipher(chKey)
+	block, err := aes.NewCipher(aesKey)
 	if err != nil {
 		return "", err
 	}

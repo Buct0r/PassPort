@@ -152,10 +152,11 @@ func FileExists(filename string) bool {
 
 func checkPasswords() ([]Password, error) {
 	if !FileExists(filename) {
-		_, err := os.Create(filename)
+		f, err := os.Create(filename)
 		if err != nil {
 			return nil, err
 		}
+		f.Close()
 		return []Password{}, fmt.Errorf("no passwords saved")
 	}
 
@@ -165,6 +166,10 @@ func checkPasswords() ([]Password, error) {
 	}
 
 	data, err := decryptData(path, filename)
+
+	if err != nil {
+		return nil, err
+	}
 
 	/*
 		if err.Error() != "ciphertext too short" {
@@ -177,9 +182,7 @@ func checkPasswords() ([]Password, error) {
 	}
 
 	text := []byte(data)
-	if err != nil {
-		return nil, err
-	}
+
 	var passwords []Password
 	err = json.Unmarshal(text, &passwords)
 	if len(passwords) < 1 {

@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"syscall"
 	"time"
 
@@ -25,6 +26,16 @@ const secret = "SECRET" // Can be changed to any desired file name
 const masterPasswordFile = "master.key"
 
 var filename string
+
+func readLine(reader *bufio.Reader) (string, error) {
+	input, err := reader.ReadString('\n')
+	if err != nil {
+		return "", err
+	}
+	input = strings.TrimSuffix(input, "\n")
+	input = strings.TrimSuffix(input, "\r")
+	return input, nil
+}
 
 func init() {
 	// Initialize filename at startup
@@ -114,8 +125,8 @@ func setupMasterPassword(renew bool) error {
 	}
 
 	if !bytes.Equal(password, confirmation) {
-		password = nil
-		confirmation = nil
+		zeroBytes(password)
+		zeroBytes(confirmation)
 		return fmt.Errorf("passwords do %snot%s match", "\033[31m", "\033[0m")
 	} else {
 		fmt.Printf("%sMaster password set successfully!%s\n\n", "\033[32m", "\033[0m")
@@ -127,6 +138,7 @@ func setupMasterPassword(renew bool) error {
 
 	hashedPassword, err := HashPassword(password)
 	if err != nil {
+
 		return err
 	}
 	//filename = rand.Text()
@@ -216,21 +228,34 @@ func FileExists(filename string) bool {
 func savePassword(passwords []Password) error {
 
 	newPassword := Password{}
+	reader := bufio.NewReader(os.Stdin)
 
 	fmt.Printf("Enter %sservice%s: ", "\033[36m", "\033[0m")
-	fmt.Scanln(&newPassword.Service)
+	input, err := readLine(reader)
+	if err != nil {
+		return err
+	}
+	newPassword.Service = input
 	service, err := sanitizeInput([]byte(newPassword.Service))
 	if err != nil {
 		return err
 	}
 	newPassword.Service = string(service)
+
 	fmt.Printf("Enter %susername%s: ", "\033[36m", "\033[0m")
-	fmt.Scanln(&newPassword.Username)
+	input, err = readLine(reader)
+	if err != nil {
+		return err
+	}
+	newPassword.Username = input
 	username, err := sanitizeInput([]byte(newPassword.Username))
 	if err != nil {
 		return err
 	}
 	newPassword.Username = string(username)
+
+	reader.Discard(reader.Buffered())
+
 	password, err := ReadPassword("Enter password: ")
 	if err != nil {
 		return err
@@ -273,10 +298,12 @@ func savePassword(passwords []Password) error {
 
 func checkPasswords() ([]Password, error) {
 	if !FileExists(filename) {
-		_, err := os.Create(filename)
+		f, err := os.Create(filename)
 		if err != nil {
 			return nil, err
 		}
+		f.Close()
+
 		return []Password{}, fmt.Errorf("no passwords saved")
 	}
 
@@ -286,6 +313,9 @@ func checkPasswords() ([]Password, error) {
 	}
 
 	data, err := decryptData(path, filename)
+	if err != nil {
+		return nil, err
+	}
 
 	/*
 		if err.Error() != "ciphertext too short" {
@@ -298,9 +328,7 @@ func checkPasswords() ([]Password, error) {
 	}
 
 	text := []byte(data)
-	if err != nil {
-		return nil, err
-	}
+
 	var passwords []Password
 	err = json.Unmarshal(text, &passwords)
 	if len(passwords) < 1 {
@@ -315,13 +343,16 @@ func searchPassword(passwords []Password) []Password {
 		return nil
 	}
 	fmt.Println("Enter the service you are looking for: ")
+	scanner := bufio.NewScanner(os.Stdin)
 	var service string
-	fmt.Scanln(&service)
+	if scanner.Scan() {
+		service = scanner.Text()
+	}
 
 	var foundPasswords []Password
 
 	for _, p := range passwords {
-		if p.Service == service {
+		if strings.TrimSpace(p.Service) == strings.TrimSpace(service) {
 			foundPasswords = append(foundPasswords, p)
 		}
 	}
@@ -354,8 +385,10 @@ func deletePassword(passwords []Password) error {
 
 	fmt.Println("Enter the service you want to delete: ")
 	var service string
-	fmt.Scanln(&service)
-
+	scanner := bufio.NewScanner(os.Stdin)
+	if scanner.Scan() {
+		service = scanner.Text()
+	}
 	var foundPasswords []Password
 
 	for _, p := range passwords {
@@ -481,7 +514,20 @@ func changeMasterPassword() error {
 	}
 
 	if FileExists(path) {
-		data, error := decryptData(path, filename)
+
+		data, err := decryptData(path, filename)
+		if err != nil {
+			fmt.Println("Error decrypting existing passwords. Please try again.")
+			return err
+		}
+
+		text := []byte(data)
+		var passwords []Password
+		err = json.Unmarshal(text, &passwords)
+		if err != nil {
+			fmt.Println("Error parsing existing password data. Please try again.")
+			return err
+		}
 
 		fmt.Println("\n⚠️  You are about to change your master password")
 		fmt.Println("Your current passwords will be re-encrypted with the new master password")
@@ -493,48 +539,85 @@ func changeMasterPassword() error {
 			fmt.Println("Operation cancelled. Your passwords are safe.")
 			return nil
 		}
-		err := setupMasterPassword(true)
+
+		dataDir := filepath.Dir(path)
+		timestamp := time.Now().Format("02-01-2006-150405") // DD-MM-YYYY-HHMMSS
+
+		oldKeyData, err := os.ReadFile(path)
 		if err != nil {
-			fmt.Println("Error setting new master password. Your old master password is still valid.")
+			fmt.Println("Error reading master password file for backup.")
+			return err
+		}
+		oldSecretData, err := os.ReadFile(filename)
+		if err != nil {
+			fmt.Println("Error reading secret file for backup.")
 			return err
 		}
 
-		if !FileExists(filename) || error != nil {
-			fmt.Printf("%sMaster password changed successfully!%s\n", "\033[32m", "\033[0m")
-			return nil
-		}
+		backupKeyPath := filepath.Join(dataDir, "master.key.backup."+timestamp)
+		backupSecretPath := filepath.Join(dataDir, "secret.backup."+timestamp)
 
-		text := []byte(data)
-		var passwords []Password
-		err = json.Unmarshal(text, &passwords)
+		err = os.WriteFile(backupKeyPath, oldKeyData, 0600)
 		if err != nil {
-			fmt.Printf("%sMaster password changed successfully!%s\n", "\033[32m", "\033[0m")
-			return nil
+			fmt.Println("Warning: Failed to write master.key backup.")
+		}
+		err = os.WriteFile(backupSecretPath, oldSecretData, 0600)
+		if err != nil {
+			fmt.Println("Warning: Failed to write secret backup.")
 		}
 
-		if len(passwords) < 1 {
-			fmt.Printf("%sMaster password changed successfully!%s\n", "\033[32m", "\033[0m")
-			return nil
+		needsRestore := false
+		defer func() {
+			if needsRestore {
+				os.WriteFile(path, oldKeyData, 0600)
+				os.WriteFile(filename, oldSecretData, 0600)
+				os.Remove(backupKeyPath)
+				os.Remove(backupSecretPath)
+				fmt.Println("\nYour original master password has been restored.")
+			} else {
+				os.Remove(backupKeyPath)
+				os.Remove(backupSecretPath)
+			}
+		}()
+
+		err = setupMasterPassword(true)
+		if err != nil {
+			fmt.Println("Error setting new master password:", err)
+			needsRestore = true
+			return err
+		}
+
+		newKeyPath, err := getMasterPasswordPath()
+		if err != nil {
+			needsRestore = true
+			return err
 		}
 
 		jsonData, err := json.MarshalIndent(passwords, "", "  ")
 		if err != nil {
+			needsRestore = true
 			return err
 		}
 
-		path, err := getMasterPasswordPath()
+		encText, err := encryptData(filename, newKeyPath, string(jsonData))
 		if err != nil {
+			fmt.Println("Error re-encrypting passwords. Your old password is being restored...")
+			needsRestore = true
 			return err
 		}
 
-		encText, err := encryptData(filename, path, string(jsonData))
+		tmpSecret := filename + ".tmp"
+		err = os.WriteFile(tmpSecret, []byte(encText), 0600)
 		if err != nil {
-			fmt.Println("Error re-encrypting passwords. Please try again.")
+			needsRestore = true
+			os.Remove(tmpSecret)
 			return err
 		}
 
-		err = os.WriteFile(filename, []byte(encText), 0600)
+		err = os.Rename(tmpSecret, filename)
 		if err != nil {
+			needsRestore = true
+			os.Remove(tmpSecret)
 			return err
 		}
 
@@ -568,12 +651,20 @@ func sanitizeInput(input []byte) ([]byte, error) {
 }
 
 func modifyPassword(passwords []Password) error {
+
+	reader := bufio.NewReader(os.Stdin)
+
 	fmt.Println("Enter the service you want to modify: ")
-	var service string
-	fmt.Scanln(&service)
+	input, err := readLine(reader)
+	if err != nil {
+		return fmt.Errorf("error reading service %w", err)
+	}
+
+	service := input
 
 	tries := 0
 
+	reader.Discard(reader.Buffered())
 	authenticated, err := AuthenticateUser()
 	if err != nil {
 		return err
@@ -596,7 +687,7 @@ func modifyPassword(passwords []Password) error {
 	var matchingIndices []int
 
 	for i, p := range passwords {
-		if p.Service == service {
+		if strings.TrimSpace(p.Service) == strings.TrimSpace(service) {
 			matchingPasswords = append(matchingPasswords, p)
 			matchingIndices = append(matchingIndices, i)
 		}
@@ -610,6 +701,7 @@ func modifyPassword(passwords []Password) error {
 	var selectedIndex int
 
 	if len(matchingPasswords) > 1 {
+		reader.Discard(reader.Buffered())
 		fmt.Printf("\nFound %d entries for '%s'. Please choose which one to modify:\n\n", len(matchingPasswords), service)
 		for i, p := range matchingPasswords {
 			fmt.Printf("[%d] Username: %s | Created: %s\n", i+1, p.Username, p.Created)
@@ -630,8 +722,12 @@ func modifyPassword(passwords []Password) error {
 	fmt.Println("Enter new details (leave blank to keep current value):")
 
 	fmt.Printf("New service (current: %s): ", selectedPassword.Service)
-	var newService string
-	fmt.Scanln(&newService)
+	input, err = readLine(reader)
+	if err != nil {
+		return err
+	}
+	newService := input
+
 	if newService != "" {
 		sanitizedService, err := sanitizeInput([]byte(newService))
 		if err != nil {
@@ -641,8 +737,11 @@ func modifyPassword(passwords []Password) error {
 	}
 
 	fmt.Printf("New username (current: %s): ", selectedPassword.Username)
-	var newUsername string
-	fmt.Scanln(&newUsername)
+	input, err = readLine(reader)
+	if err != nil {
+		return err
+	}
+	newUsername := input
 	if newUsername != "" {
 		sanitizedUsername, err := sanitizeInput([]byte(newUsername))
 		if err != nil {
@@ -650,6 +749,9 @@ func modifyPassword(passwords []Password) error {
 		}
 		selectedPassword.Username = string(sanitizedUsername)
 	}
+
+	reader.Discard(reader.Buffered())
+
 	fmt.Printf("New password (leave blank to keep current): ")
 	newPassword, err := ReadPassword("")
 	if err != nil {
@@ -692,7 +794,10 @@ func maskPassword(password string) string {
 func revealPassword(passwords []Password) error {
 	fmt.Println("Enter the service you want to reveal the password for: ")
 	var service string
-	fmt.Scanln(&service)
+	scanner := bufio.NewScanner(os.Stdin)
+	if scanner.Scan() {
+		service = scanner.Text()
+	}
 
 	var foundPasswords []Password
 
@@ -721,7 +826,7 @@ func revealPassword(passwords []Password) error {
 		selectedPassword := foundPasswords[choice-1]
 
 		fmt.Printf("\n%sWarning:%s Revealing passwords can be risky. Make sure no one is looking at your screen.\n", "\033[31m", "\033[0m")
-		time.Sleep(2 * time.Second)
+		time.Sleep(5 * time.Second)
 
 		fmt.Printf("Password for service %s'%s'%s and username %s'%s'%s : %s\n", "\033[32m", selectedPassword.Service, "\033[0m", "\033[32m", selectedPassword.Username, "\033[0m", selectedPassword.Password)
 		fmt.Printf("%sThis password will be hidden again in 10 seconds%s\n", "\033[31m", "\033[0m")
@@ -731,7 +836,7 @@ func revealPassword(passwords []Password) error {
 		return nil
 	} else {
 		fmt.Printf("\n%sWarning:%s Revealing passwords can be risky. Make sure no one is looking at your screen.\n", "\033[31m", "\033[0m")
-		time.Sleep(2 * time.Second)
+		time.Sleep(5 * time.Second)
 		fmt.Printf("Password for service %s'%s'%s and username %s'%s'%s : %s\n", "\033[32m", foundPasswords[0].Service, "\033[0m", "\033[32m", foundPasswords[0].Username, "\033[0m", foundPasswords[0].Password)
 		fmt.Printf("%sThis password will be hidden again in 10 seconds%s\n", "\033[31m", "\033[0m")
 		time.Sleep(10 * time.Second)

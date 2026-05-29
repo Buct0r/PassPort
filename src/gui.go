@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"image/color"
 	"os"
+	"path/filepath"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -103,6 +104,10 @@ func authWindow(a fyne.App, onComplete func(bool)) {
 			}
 		})
 
+		passwordEntry.OnSubmitted = func(s string) {
+			submitButton.OnTapped()
+		}
+
 		w.SetContent(container.NewVBox(
 			container.NewCenter(widget.NewRichTextFromMarkdown("# PassPort")),
 			container.NewStack(img),
@@ -153,6 +158,7 @@ func authWindow(a fyne.App, onComplete func(bool)) {
 func authenticate(password string) bool {
 	path, err := getMasterPasswordPath()
 	if err != nil {
+
 		fmt.Println("authentication failed")
 		return false
 	}
@@ -258,6 +264,7 @@ func gui() {
 
 		w.Resize(fyne.NewSize(1060, 680))
 
+		var searchTerm string
 		var refreshUI func()
 		refreshUI = func() {
 			passwords, err := checkPasswords()
@@ -271,7 +278,7 @@ func gui() {
 			titleContainer := container.NewVBox(title)
 			titleCenter := container.NewCenter(titleContainer)
 			newButton := widget.NewButtonWithIcon("", theme.ContentAddIcon(), func() {
-				addPasswordGUI(passwords, w, refreshUI, a, start)
+				addPasswordGUI(passwords, w, refreshUI, a, &start)
 			})
 			editButton := widget.NewButton("Edit master password", func() {
 				editMasterPasswordGUI(w, func(success bool) {
@@ -280,7 +287,7 @@ func gui() {
 					} else {
 						dialog.ShowError(fmt.Errorf("Failed to update master password"), w)
 					}
-				}, a, start)
+				}, a, &start)
 			})
 			modal := widget.NewModalPopUp(widget.NewLabel(""), w.Canvas()) //dummy modal to be replaced
 			settingsContent := container.NewVBox(
@@ -324,24 +331,61 @@ func gui() {
 				widget.NewButton("Close", func() {
 					modal.Hide()
 				}),
-				widget.NewLabel("PassPort v0.2.0 developed by Buct0r"), //TODO: Update at every release
+				widget.NewLabel("PassPort v0.3.0 developed by Buct0r"), //TODO: Update at every release
 			)
 			settingsButton := widget.NewButtonWithIcon("", theme.SettingsIcon(), func() {
 				modal = widget.NewModalPopUp(settingsContent, w.Canvas())
 				modal.Show()
 			})
 
+			searchBar := widget.NewEntry()
+			searchBar.SetPlaceHolder("Search by service name...")
+			searchButton := widget.NewButtonWithIcon("", theme.SearchIcon(), func() {
+				s := searchBar.Text
+				if s == "" {
+					searchTerm = ""
+					refreshUI()
+					return
+				}
+				var found []Password
+				for _, p := range passwords {
+					if bytes.Contains(bytes.ToLower([]byte(p.Service)), bytes.ToLower([]byte(s))) {
+						found = append(found, p)
+					}
+				}
+				if len(found) == 0 {
+					dialog.ShowInformation("No Results", "No passwords found matching that service name.", w)
+					return
+				}
+				searchTerm = s
+				refreshUI()
+
+			})
+
+			searchContainer := container.NewBorder(nil, nil, nil, searchButton, searchBar)
+			searchBar.OnSubmitted = func(s string) {
+				searchButton.OnTapped()
+			}
 			titleContainer.Add(newButton)
 			titleContainer.Add(settingsButton)
+			titleContainer.Add(searchContainer)
 			containers.Add(titleCenter)
 			//buttonsContainer := container.NewHBox()
 			//containers.Add(buttonsContainer)
 			cardContainer := container.NewGridWrap(fyne.NewSize(300, 200))
 			for _, p := range passwords {
+				if searchTerm != "" {
+					if !bytes.Contains(bytes.ToLower([]byte(p.Service)), bytes.ToLower([]byte(searchTerm))) {
+						continue
+					}
+				}
 				pwd := p
 				card := widget.NewCard(pwd.Service, "Username: "+pwd.Username, container.NewVBox(
-					widget.NewRichTextFromMarkdown("**Created: "+pwd.Created+"**"),
+					widget.NewRichTextFromMarkdown("**Last edited: "+pwd.Created+"**"),
 					container.NewHBox(widget.NewButton("Reveal", func() {
+
+						start = time.Now()
+
 						password := pwd.Password
 						passwordBytes := []byte(password)
 						modal := widget.NewModalPopUp(widget.NewLabel(""), w.Canvas()) //dummy modal to be replaced
@@ -382,10 +426,10 @@ func gui() {
 
 					}),
 						widget.NewButton("Delete", func() {
-							deletePasswordGUI(passwords, w, pwd.Service, refreshUI, a, start)
+							deletePasswordGUI(passwords, w, pwd.Service, refreshUI, a, &start)
 						}),
 						widget.NewButton("Edit", func() {
-							editPasswordGUI(passwords, w, pwd.Service, refreshUI, a, start)
+							editPasswordGUI(passwords, w, pwd.Service, refreshUI, a, &start)
 						}),
 					),
 				))
@@ -418,8 +462,9 @@ func getThemeByName(name string) fyne.Theme {
 	}
 }
 
-func deletePasswordGUI(passwords []Password, w fyne.Window, service string, onDelete func(), a fyne.App, start time.Time) error {
-	if time.Since(start) > 15*time.Minute {
+func deletePasswordGUI(passwords []Password, w fyne.Window, service string, onDelete func(), a fyne.App, start *time.Time) error {
+
+	if time.Since(*start) > 15*time.Minute {
 		dialog.ShowInformation("Session Expired", "Your session has expired due to inactivity. Please re-authenticate to continue.", w)
 		authWindow(a, func(authenticated bool) {
 			if authenticated {
@@ -430,6 +475,9 @@ func deletePasswordGUI(passwords []Password, w fyne.Window, service string, onDe
 		})
 		return nil
 	}
+
+	*start = time.Now()
+
 	var passwordToDelete *Password
 	var updatedPasswords []Password
 	for _, p := range passwords {
@@ -454,20 +502,27 @@ func deletePasswordGUI(passwords []Password, w fyne.Window, service string, onDe
 		"Confirm Deletion",
 		fmt.Sprintf("Are you sure you want to delete the password for '%s'?", service),
 		func(confirmed bool) {
+
+			if time.Since(*start) > 15*time.Minute {
+				dialog.ShowError(fmt.Errorf("session expired"), w)
+				w.Close()
+				return
+			}
+
 			if confirmed {
 				data, err := json.MarshalIndent(updatedPasswords, "", "  ")
 				if err != nil {
-					fmt.Println("Error marshaling data:", err)
+					dialog.ShowError(err, w)
 					return
 				}
 				text, err := encryptData(filename, path, string(data))
 				if err != nil {
-					fmt.Println("Error encrypting data:", err)
+					dialog.ShowError(err, w)
 					return
 				}
 				err = os.WriteFile(filename, []byte(text), 0600)
 				if err != nil {
-					fmt.Println("Error writing file:", err)
+					dialog.ShowError(err, w)
 					return
 				}
 
@@ -481,8 +536,8 @@ func deletePasswordGUI(passwords []Password, w fyne.Window, service string, onDe
 	return nil
 }
 
-func editPasswordGUI(passwords []Password, w fyne.Window, service string, onEdit func(), a fyne.App, start time.Time) error {
-	if time.Since(start) > 15*time.Minute {
+func editPasswordGUI(passwords []Password, w fyne.Window, service string, onEdit func(), a fyne.App, start *time.Time) error {
+	if time.Since(*start) > 15*time.Minute {
 		dialog.ShowInformation("Session Expired", "Your session has expired due to inactivity. Please re-authenticate to continue.", w)
 		authWindow(a, func(authenticated bool) {
 			if authenticated {
@@ -494,6 +549,7 @@ func editPasswordGUI(passwords []Password, w fyne.Window, service string, onEdit
 		return nil
 	}
 
+	*start = time.Now()
 	var passwordToEdit *Password
 	for _, p := range passwords {
 		if p.Service == service {
@@ -516,6 +572,13 @@ func editPasswordGUI(passwords []Password, w fyne.Window, service string, onEdit
 	passwordEntry.SetText(passwordToEdit.Password)
 
 	saveButton := widget.NewButton("Save", func() {
+
+		if time.Since(*start) > 15*time.Minute {
+			dialog.ShowError(fmt.Errorf("session expired"), w)
+			w.Close()
+			return
+		}
+
 		updatedService := serviceEntry.Text
 		updatedUsername := usernameEntry.Text
 		updatedPassword := passwordEntry.Text
@@ -538,22 +601,22 @@ func editPasswordGUI(passwords []Password, w fyne.Window, service string, onEdit
 		}
 		data, err := json.MarshalIndent(updatedPasswords, "", "  ")
 		if err != nil {
-			fmt.Println("Error marshaling data:", err)
+			dialog.ShowError(err, w)
 			return
 		}
 		path, err := getMasterPasswordPath()
 		if err != nil {
-			fmt.Println("Error determining master password path:", err)
+			dialog.ShowError(err, w)
 			return
 		}
 		text, err := encryptData(filename, path, string(data))
 		if err != nil {
-			fmt.Println("Error encrypting data:", err)
+			dialog.ShowError(err, w)
 			return
 		}
 		err = os.WriteFile(filename, []byte(text), 0600)
 		if err != nil {
-			fmt.Println("Error writing file:", err)
+			dialog.ShowError(err, w)
 			return
 		}
 		onEdit()
@@ -580,8 +643,8 @@ func editPasswordGUI(passwords []Password, w fyne.Window, service string, onEdit
 	return nil
 }
 
-func addPasswordGUI(passwords []Password, w fyne.Window, onAdd func(), a fyne.App, start time.Time) {
-	if time.Since(start) > 15*time.Minute {
+func addPasswordGUI(passwords []Password, w fyne.Window, onAdd func(), a fyne.App, start *time.Time) {
+	if time.Since(*start) > 15*time.Minute {
 		dialog.ShowInformation("Session Expired", "Your session has expired due to inactivity. Please re-authenticate to continue.", w)
 		authWindow(a, func(authenticated bool) {
 			if authenticated {
@@ -593,6 +656,7 @@ func addPasswordGUI(passwords []Password, w fyne.Window, onAdd func(), a fyne.Ap
 		return
 	}
 
+	*start = time.Now()
 	var newPassword Password
 	modal := widget.NewModalPopUp(widget.NewLabel(""), w.Canvas())
 
@@ -605,6 +669,13 @@ func addPasswordGUI(passwords []Password, w fyne.Window, onAdd func(), a fyne.Ap
 	date := time.Now().Format("2006-01-02 15:04:05")
 
 	saveButton := widget.NewButton("Save", func() {
+
+		if time.Since(*start) > 15*time.Minute {
+			dialog.ShowError(fmt.Errorf("session expired"), w)
+			w.Close()
+			return
+		}
+
 		updatedService := serviceEntry.Text
 		updatedUsername := usernameEntry.Text
 		updatedPassword := passwordEntry.Text
@@ -623,22 +694,22 @@ func addPasswordGUI(passwords []Password, w fyne.Window, onAdd func(), a fyne.Ap
 		}
 		data, err := json.MarshalIndent(updatedPasswords, "", "  ")
 		if err != nil {
-			fmt.Println("Error marshaling data:", err)
+			dialog.ShowError(err, w)
 			return
 		}
 		path, err := getMasterPasswordPath()
 		if err != nil {
-			fmt.Println("Error determining master password path:", err)
+			dialog.ShowError(err, w)
 			return
 		}
 		text, err := encryptData(filename, path, string(data))
 		if err != nil {
-			fmt.Println("Error encrypting data:", err)
+			dialog.ShowError(err, w)
 			return
 		}
 		err = os.WriteFile(filename, []byte(text), 0600)
 		if err != nil {
-			fmt.Println("Error writing file:", err)
+			dialog.ShowError(err, w)
 			return
 		}
 		onAdd()
@@ -648,6 +719,10 @@ func addPasswordGUI(passwords []Password, w fyne.Window, onAdd func(), a fyne.Ap
 	closeButton := widget.NewButton("Close", func() {
 		modal.Hide()
 	})
+
+	passwordEntry.OnSubmitted = func(s string) {
+		saveButton.OnTapped()
+	}
 
 	content := container.NewVBox(
 		widget.NewLabel("Add New Password Entry"),
@@ -695,9 +770,9 @@ func setupMasterPasswordGUI(password string, confirmation string) error {
 
 }
 
-func editMasterPasswordGUI(w fyne.Window, onComplete func(bool), a fyne.App, start time.Time) error {
+func editMasterPasswordGUI(w fyne.Window, onComplete func(bool), a fyne.App, start *time.Time) error {
 
-	if time.Since(start) > 15*time.Minute {
+	if time.Since(*start) > 15*time.Minute {
 		dialog.ShowInformation("Session Expired", "Your session has expired due to inactivity. Please re-authenticate to continue.", w)
 		authWindow(a, func(authenticated bool) {
 			if authenticated {
@@ -709,6 +784,7 @@ func editMasterPasswordGUI(w fyne.Window, onComplete func(bool), a fyne.App, sta
 		return nil
 	}
 
+	*start = time.Now()
 	path, err := getMasterPasswordPath()
 	if err != nil {
 		return fmt.Errorf("error determining master password path: %v", err)
@@ -812,31 +888,73 @@ func editMasterPasswordGUI(w fyne.Window, onComplete func(bool), a fyne.App, sta
 				return
 			}
 
-			//filename = rand.Text()
+			oldKeyData, err := os.ReadFile(path)
+			if err != nil {
+				dialog.ShowError(fmt.Errorf("failed to backup master password: %v", err), w)
+				return
+			}
+			oldSecretData, err := os.ReadFile(filename)
+			if err != nil {
+				dialog.ShowError(fmt.Errorf("failed to backup secret file: %v", err), w)
+				return
+			}
+
+			dataDir := filepath.Dir(path)
+			timestamp := time.Now().Format("02-01-2006-150405") // DD-MM-YYYY-HHMMSS
+			backupKeyPath := filepath.Join(dataDir, "master.key.backup."+timestamp)
+			backupSecretPath := filepath.Join(dataDir, "secret.backup."+timestamp)
+
+			os.WriteFile(backupKeyPath, oldKeyData, 0600)
+			os.WriteFile(backupSecretPath, oldSecretData, 0600)
+
+			restoreFromBackup := func() {
+				os.WriteFile(path, oldKeyData, 0600)
+				os.WriteFile(filename, oldSecretData, 0600)
+				os.Remove(backupKeyPath)
+				os.Remove(backupSecretPath)
+			}
 
 			err = os.WriteFile(path, []byte(hashedPassword), 0600)
 			if err != nil {
 				dialog.ShowInformation("Error", "Failed to write master password", w)
+				os.Remove(backupKeyPath)
+				os.Remove(backupSecretPath)
 				return
 			}
 
 			jsonData, err := json.MarshalIndent(passwords, "", "  ")
 			if err != nil {
+				restoreFromBackup()
 				dialog.ShowInformation("Error", "Failed to marshal data: "+err.Error(), w)
 				return
 			}
 
 			encText, err := encryptData(filename, path, string(jsonData))
 			if err != nil {
+				restoreFromBackup()
 				dialog.ShowInformation("Error", "Failed to encrypt data: "+err.Error(), w)
 				return
 			}
 
-			err = os.WriteFile(filename, []byte(encText), 0600)
+			tmpSecret := filename + ".tmp"
+			err = os.WriteFile(tmpSecret, []byte(encText), 0600)
 			if err != nil {
+				restoreFromBackup()
+				os.Remove(tmpSecret)
 				dialog.ShowInformation("Error", "Failed to write data: "+err.Error(), w)
 				return
 			}
+
+			err = os.Rename(tmpSecret, filename)
+			if err != nil {
+				restoreFromBackup()
+				os.Remove(tmpSecret)
+				dialog.ShowInformation("Error", "Failed to write data: "+err.Error(), w)
+				return
+			}
+
+			os.Remove(backupKeyPath)
+			os.Remove(backupSecretPath)
 
 			onComplete(true)
 			modal.Hide()
