@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=PassPort
+Comment=Secure password manager
+Exec=passport
+Icon=passport
+Categories=Utility;Security;
+Terminal=false
+StartupNotify=true

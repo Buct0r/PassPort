@@ -113,6 +113,63 @@ checksum:
   name_template: "checksums.txt"
   algorithm: sha256
 
+nfpms:
+  - id: gui-linux
+    package_name: passport
+    builds:
+      - gui-linux-amd64
+    formats:
+      - deb
+      - rpm
+    vendor: Buct0r
+    homepage: https://github.com/Buct0r/PassPort
+    maintainer: Buct0r
+    description: |-
+      A secure, cross-platform password manager built with Go and Fyne.
+      PassPort provides both a graphical user interface (GUI) and
+      command-line interface (CLI) for managing encrypted passwords.
+    license: MIT
+    section: utils
+    priority: optional
+    recommends:
+      - passport-cli
+    contents:
+      - src: img/logo.png
+        dst: /usr/share/pixmaps/passport.png
+      - src: packaging/passport.desktop
+        dst: /usr/share/applications/passport.desktop
+    overrides:
+      deb:
+        dependencies:
+          - libgl1
+          - libxcursor1
+          - libxrandr2
+          - libxinerama1
+      rpm:
+        dependencies:
+          - mesa-libGL
+          - libXcursor
+          - libXrandr
+          - libXinerama
+
+  - id: cli-linux
+    package_name: passport-cli
+    builds:
+      - cli-linux-amd64
+      - cli-linux-arm64
+    formats:
+      - deb
+      - rpm
+    vendor: Buct0r
+    homepage: https://github.com/Buct0r/PassPort
+    maintainer: Buct0r
+    description: |-
+      A secure password manager command-line interface.
+      Manage encrypted passwords and sensitive information from the terminal.
+    license: MIT
+    section: utils
+    priority: optional
+
 snapshot:
   name_template: "{{ .Version }}-SNAPSHOT-{{ .ShortCommit }}"
 
@@ -135,3 +192,4 @@ release:
     name: PassPort
   draft: false
   prerelease: false
+

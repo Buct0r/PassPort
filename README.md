@@ -12,14 +12,14 @@ A secure, cross-platform password manager built with Go and Fyne. PassPort provi
   - Graphical User Interface (GUI) built with Fyne
   - Command-Line Interface (CLI) for terminal users
 - **Master Password**: Single master password protects all stored credentials
-- **Easy Installation**: Includes installers for Windows
+- **Easy Installation**: Includes installers for Windows and a cross-platform install script for Linux/macOS
 - **Customizable Theme**: Configurable application theme
 
 ## System Requirements
 
 - Go 1.26.0 or later (for building from source)
-- Windows 10+ or macOS 10.13+
-- OpenGL support for GUI mode
+- Windows 10+, Linux, or macOS 10.13+
+- OpenGL support for GUI mode (Linux: `libgl1-mesa-dev xorg-dev`)
 
 ## Installation
 
@@ -60,6 +60,43 @@ winget install Buct0r.PassPort
 
 ### Linux
 
+#### Using the Install Script
+
+The quickest way to install PassPort on Linux (and macOS for CLI-only):
+
+```bash
+# Install CLI only (works on all platforms)
+curl -fsSL https://raw.githubusercontent.com/Buct0r/PassPort/main/install.sh | bash
+
+# Install GUI + CLI (Linux amd64 only)
+curl -fsSL https://raw.githubusercontent.com/Buct0r/PassPort/main/install.sh | bash -s -- --gui
+```
+
+The script will:
+- Auto-detect your OS and architecture
+- Fetch the latest release from GitHub
+- Install to `/usr/local/bin/` (uses `sudo` when needed)
+- Verify GUI dependencies on Linux
+
+For a custom install location:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Buct0r/PassPort/main/install.sh | bash -s -- --prefix ~/.local
+```
+
+#### Using .deb or .rpm packages
+
+Pre-built `.deb` (Debian/Ubuntu) and `.rpm` (Fedora/RHEL) packages are available on the [releases page](https://github.com/Buct0r/PassPort/releases).
+
+```bash
+# Debian/Ubuntu
+sudo dpkg -i passport_*.deb
+sudo apt install -f      # install dependencies
+
+# Fedora/RHEL
+sudo rpm -i passport-*.rpm
+```
+
 #### Building from Source
 
 1. Ensure Go 1.26.0+ is installed
@@ -85,6 +122,14 @@ winget install Buct0r.PassPort
    ```
 
 ### macOS
+
+#### Using the Install Script
+
+The install script works on macOS for CLI-only installs:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Buct0r/PassPort/main/install.sh | bash
+```
 
 #### Using Homebrew
 
