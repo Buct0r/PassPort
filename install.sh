@@ -9,7 +9,7 @@
 #   curl -fsSL https://raw.githubusercontent.com/Buct0r/PassPort/main/install.sh | bash
 #   curl -fsSL https://raw.githubusercontent.com/Buct0r/PassPort/main/install.sh | bash -s -- --cli
 #   ./install.sh --gui
-#   ./install.sh --prefix ~/.local --version v0.3.0
+#   ./install.sh --prefix ~/.local --version v0.4.0
 #
 # Options:
 #   --cli              Install CLI only (non-interactive default)
@@ -49,7 +49,7 @@ Options:
   --cli              Install CLI only (non-interactive default)
   --gui              Install GUI only (non-interactive)
   --prefix <dir>     Install to <dir>/bin (default: /usr/local)
-  --version <tag>    Install specific version (e.g. v0.3.0)
+  --version <tag>    Install specific version (e.g. v0.4.0)
   --yes, -y          Non-interactive mode
   --help, -h         Show this help
 EOF
@@ -130,8 +130,11 @@ detect_variants() {
     GUI_AVAIL=false
     CLI_AVAIL=true
 
+    # macOS has GUI+CLI (both amd64 and arm64)
+    if [ "$OS" = "darwin" ]; then
+        GUI_AVAIL=true
     # Linux amd64 has GUI+CLI; Linux arm64 has CLI only
-    if [ "$OS" = "linux" ] && [ "$ARCH" = "amd64" ]; then
+    elif [ "$OS" = "linux" ] && [ "$ARCH" = "amd64" ]; then
         GUI_AVAIL=true
     fi
 }

@@ -1,6 +1,3 @@
-//go:build windows || linux
-// +build windows linux
-
 package main
 
 import (
@@ -221,7 +218,7 @@ func saveConfig(theme string) error {
 
 }
 
-func gui() {
+func runFyneGUI() {
 
 	start := time.Now()
 
@@ -331,7 +328,7 @@ func gui() {
 				widget.NewButton("Close", func() {
 					modal.Hide()
 				}),
-				widget.NewLabel("PassPort v0.3.0 developed by Buct0r"), //TODO: Update at every release
+				widget.NewLabel("PassPort v0.4.0 developed by Buct0r"), //TODO: Update at every release
 			)
 			settingsButton := widget.NewButtonWithIcon("", theme.SettingsIcon(), func() {
 				modal = widget.NewModalPopUp(settingsContent, w.Canvas())

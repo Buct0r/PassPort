@@ -33,6 +33,7 @@ jobs:
           fi
           VERSION="${VERSION#v}"
           echo "VERSION=$VERSION" | tee -a $GITHUB_ENV
+          echo "HEAD_SHA=${{ github.event.workflow_run.head_sha }}" >> $GITHUB_ENV
 
       - name: Wait for both workflows to complete
         run: |
@@ -40,14 +41,14 @@ jobs:
           for i in {1..40}; do
             echo "Attempt $i: Checking workflow status..."
 
-            # Check Linux/Windows workflow status
+            # Check Linux/Windows workflow status (scoped to this commit)
             MAIN_STATUS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              "https://api.github.com/repos/Buct0r/PassPort/actions/workflows/build-release.yml/runs?status=completed&per_page=1" \
+              "https://api.github.com/repos/Buct0r/PassPort/actions/workflows/build-release.yml/runs?head_sha=$HEAD_SHA&status=completed&per_page=1" \
               | jq -r '.workflow_runs[0].conclusion // "not_found"')
 
-            # Check macOS workflow status
+            # Check macOS workflow status (scoped to this commit)
             MACOS_STATUS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              "https://api.github.com/repos/Buct0r/PassPort/actions/workflows/build-release-macos.yml/runs?status=completed&per_page=1" \
+              "https://api.github.com/repos/Buct0r/PassPort/actions/workflows/build-release-macos.yml/runs?head_sha=$HEAD_SHA&status=completed&per_page=1" \
               | jq -r '.workflow_runs[0].conclusion // "not_found"')
 
             echo "Linux/Windows: $MAIN_STATUS, macOS: $MACOS_STATUS"
@@ -109,6 +110,7 @@ jobs:
       - name: Extract SHA256 hashes
         run: |
           SHA_LIN=$(grep "linux-amd64" /tmp/checksums.txt | head -1 | awk '{print $1}')
+          GUI_LIN=$(grep "PassPort-gui.*linux-amd64" /tmp/checksums.txt | head -1 | awk '{print $1}')
           if [ -f /tmp/checksums-macos.txt ]; then
             SHA_ARM=$(grep "darwin-arm64" /tmp/checksums-macos.txt | head -1 | awk '{print $1}')
             SHA_AMD=$(grep "darwin-amd64" /tmp/checksums-macos.txt | head -1 | awk '{print $1}')
@@ -130,6 +132,7 @@ jobs:
           echo "SHA_AMD=$AMD" >> $GITHUB_ENV
           echo "GUI_ARM=$GUI_ARM" >> $GITHUB_ENV
           echo "GUI_AMD=$GUI_AMD" >> $GITHUB_ENV
+          echo "GUI_LIN=$GUI_LIN" >> $GITHUB_ENV
 
       - name: Clone or init repo
         run: |
@@ -164,10 +167,12 @@ jobs:
           VER="${{ env.VERSION }}"
           GUI_ARM="${{ env.GUI_ARM }}"
           GUI_AMD="${{ env.GUI_AMD }}"
+          GUI_LIN="${{ env.GUI_LIN }}"
           SHA_ARM="${{ env.SHA_ARM }}"
           SHA_AMD="${{ env.SHA_AMD }}"
+          LIN="${{ env.SHA_LIN }}"
 
-          printf 'class Passport < Formula\n  desc "A secure password manager for macOS (GUI + CLI)"\n  homepage "https://github.com/Buct0r/PassPort"\n  version "%s"\n  license "MIT"\n\n  on_macos do\n    if Hardware::CPU.arm?\n      url "https://github.com/Buct0r/PassPort/releases/download/v%s/PassPort-gui-%s-darwin-arm64.tar.gz"\n      sha256 "%s"\n\n      resource "cli" do\n        url "https://github.com/Buct0r/PassPort/releases/download/v%s/PassPort-cli-%s-darwin-arm64.tar.gz"\n        sha256 "%s"\n      end\n    else\n      url "https://github.com/Buct0r/PassPort/releases/download/v%s/PassPort-gui-%s-darwin-amd64.tar.gz"\n      sha256 "%s"\n\n      resource "cli" do\n        url "https://github.com/Buct0r/PassPort/releases/download/v%s/PassPort-cli-%s-darwin-amd64.tar.gz"\n        sha256 "%s"\n      end\n    end\n  end\n\n  def install\n    bin.install "passport"\n    resource("cli").stage { bin.install "passport-cli" }\n  end\n\n  test do\n    system "#{bin}/passport", "--version"\n  end\nend\n' "$VER" "$VER" "$VER" "$GUI_ARM" "$VER" "$VER" "$SHA_ARM" "$VER" "$VER" "$GUI_AMD" "$VER" "$VER" "$SHA_AMD" > Formula/passport.rb
+          printf 'class Passport < Formula\n  desc "A secure password manager for macOS and Linux (GUI + CLI)"\n  homepage "https://github.com/Buct0r/PassPort"\n  version "%s"\n  license "MIT"\n\n  on_macos do\n    if Hardware::CPU.arm?\n      url "https://github.com/Buct0r/PassPort/releases/download/v%s/PassPort-gui-%s-darwin-arm64.tar.gz"\n      sha256 "%s"\n\n      resource "cli" do\n        url "https://github.com/Buct0r/PassPort/releases/download/v%s/PassPort-cli-%s-darwin-arm64.tar.gz"\n        sha256 "%s"\n      end\n    else\n      url "https://github.com/Buct0r/PassPort/releases/download/v%s/PassPort-gui-%s-darwin-amd64.tar.gz"\n      sha256 "%s"\n\n      resource "cli" do\n        url "https://github.com/Buct0r/PassPort/releases/download/v%s/PassPort-cli-%s-darwin-amd64.tar.gz"\n        sha256 "%s"\n      end\n    end\n  end\n\n  on_linux do\n    url "https://github.com/Buct0r/PassPort/releases/download/v%s/PassPort-gui-%s-linux-amd64.tar.gz"\n    sha256 "%s"\n\n    resource "cli" do\n      url "https://github.com/Buct0r/PassPort/releases/download/v%s/PassPort-cli-%s-linux-amd64.tar.gz"\n      sha256 "%s"\n    end\n  end\n\n  def install\n    bin.install "passport"\n    resource("cli").stage { bin.install "passport-cli" }\n  end\n\n  test do\n    system "#{bin}/passport", "--version"\n  end\nend\n' "$VER" "$VER" "$VER" "$GUI_ARM" "$VER" "$VER" "$SHA_ARM" "$VER" "$VER" "$GUI_AMD" "$VER" "$VER" "$SHA_AMD" "$VER" "$VER" "$GUI_LIN" "$VER" "$VER" "$LIN" > Formula/passport.rb
           echo "=== Combined Formula ==="
           cat Formula/passport.rb
 

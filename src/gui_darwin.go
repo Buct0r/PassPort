@@ -1,13 +1,16 @@
 //go:build darwin
-// +build darwin
 
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+)
 
-// gui is a no-op on macOS due to Fyne OpenGL dependency limitations
-// Users should use CLI mode on macOS
 func gui() {
-	fmt.Println("Note: GUI mode is not available on macOS in this version due to Fyne OpenGL dependency constraints.")
-	fmt.Println("Please use CLI mode with the -cli flag instead.")
+	if os.Getenv("SSH_CONNECTION") != "" || os.Getenv("SSH_TTY") != "" {
+		fmt.Println("No display detected. Use --cli for CLI mode.")
+		return
+	}
+	runFyneGUI()
 }

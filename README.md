@@ -7,7 +7,7 @@ A secure, cross-platform password manager built with Go and Fyne. PassPort provi
 ## Features
 
 - **Secure Encryption**: AES encryption with PBKDF2 key derivation for maximum security
-- **Cross-Platform**: Works on Windows and macOS
+- **Cross-Platform**: Works on Windows, Linux, and macOS
 - **Dual Interface**: 
   - Graphical User Interface (GUI) built with Fyne
   - Command-Line Interface (CLI) for terminal users
@@ -62,7 +62,7 @@ winget install Buct0r.PassPort
 
 #### Using the Install Script
 
-The quickest way to install PassPort on Linux (and macOS for CLI-only):
+The quickest way to install PassPort on Linux and macOS:
 
 ```bash
 # Install CLI only (works on all platforms)
@@ -125,15 +125,19 @@ sudo rpm -i passport-*.rpm
 
 #### Using the Install Script
 
-The install script works on macOS for CLI-only installs:
+The install script works on macOS for both CLI and GUI installs:
 
 ```bash
+# Install CLI only (default)
 curl -fsSL https://raw.githubusercontent.com/Buct0r/PassPort/main/install.sh | bash
+
+# Install GUI + CLI
+curl -fsSL https://raw.githubusercontent.com/Buct0r/PassPort/main/install.sh | bash -s -- --gui
 ```
 
 #### Using Homebrew
 
-The easiest way to install PassPort on macOS is using Homebrew:
+The easiest way to install PassPort on macOS and Linux is using Homebrew:
 
 ```bash
 brew tap Buct0r/PassPort
@@ -300,6 +304,6 @@ PassPort is provided as-is. While security has been prioritized, users should re
 
 ---
 
-**Version**: 0.2.0
-**Last Updated**: April 2026  
+**Version**: 0.4.0
+**Last Updated**: June 2026  
 **Maintainer**: Buct0r
