@@ -19,7 +19,7 @@ A secure, cross-platform password manager built with Go and Fyne. PassPort provi
 
 - Go 1.26.0 or later (for building from source)
 - Windows 10+, Linux, or macOS 10.13+
-- OpenGL support for GUI mode (Linux: `libgl1-mesa-dev xorg-dev`)
+- OpenGL support for GUI mode (Linux: `libgl1-mesa-dev xorg-dev libxinerama-dev libxrandr-dev libxcursor-dev libwayland-dev libxkbcommon-dev wayland-protocols`)
 
 ## Installation
 
@@ -108,7 +108,7 @@ sudo rpm -i passport-*.rpm
 
 3. Install dependencies (for GUI):
    ```bash
-   sudo apt-get install libgl1-mesa-dev xorg-dev
+   sudo apt-get install libgl1-mesa-dev xorg-dev libxinerama-dev libxrandr-dev libxcursor-dev libwayland-dev libxkbcommon-dev wayland-protocols
    ```
 
 4. Build the GUI version:
@@ -336,5 +336,5 @@ PassPort is provided as-is. While security has been prioritized, users should re
 ---
 
 **Version**: 1.0.0
-**Last Updated**: June 2026  
+**Last Updated**: November 2026  
 **Maintainer**: Buct0r

@@ -30,7 +30,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgl1-mesa-dev xorg-dev libxinerama-dev libxrandr-dev libxcursor-dev
+          sudo apt-get install -y libgl1-mesa-dev xorg-dev libxinerama-dev libxrandr-dev libxcursor-dev libwayland-dev libxkbcommon-dev wayland-protocols
 
       - name: Download Go modules
         run: go mod download
