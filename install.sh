@@ -9,7 +9,7 @@
 #   curl -fsSL https://raw.githubusercontent.com/Buct0r/PassPort/main/install.sh | bash
 #   curl -fsSL https://raw.githubusercontent.com/Buct0r/PassPort/main/install.sh | bash -s -- --cli
 #   ./install.sh --gui
-#   ./install.sh --prefix ~/.local --version v0.4.0
+#   ./install.sh --prefix ~/.local --version v1.0.0
 #
 # Options:
 #   --cli              Install CLI only (non-interactive default)
@@ -49,7 +49,7 @@ Options:
   --cli              Install CLI only (non-interactive default)
   --gui              Install GUI only (non-interactive)
   --prefix <dir>     Install to <dir>/bin (default: /usr/local)
-  --version <tag>    Install specific version (e.g. v0.4.0)
+  --version <tag>    Install specific version (e.g. v1.0.0)
   --yes, -y          Non-interactive mode
   --help, -h         Show this help
 EOF

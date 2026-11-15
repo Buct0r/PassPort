@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-const version = "0.4.0" //TODO: UPDATE EVERY TIME A CHANGE IS MADE TO THE CLI
+const version = "1.0.0" //TODO: UPDATE EVERY TIME A CHANGE IS MADE TO THE CLI
 
 func main() {
 
@@ -21,6 +21,8 @@ func main() {
 	flag.BoolVar(&help, "h", false, "Show help message")
 	flag.Parse()
 
+	initCLITheme()
+
 	if v {
 		fmt.Printf("PassPort version %s\n", version)
 		return
@@ -33,7 +35,7 @@ func main() {
 		return
 	} else {
 
-		fmt.Printf("**********%sPassPort%s**********\n", "\033[36m", "\033[0m")
+		fmt.Printf("**********%sPassPort%s**********\n", accentColor(), resetColor())
 
 		err := setupMasterPassword(false)
 		if err != nil {
@@ -66,7 +68,7 @@ func main() {
 
 		for {
 			if time.Since(start) > sessionTimeout {
-				fmt.Printf("%sSession expired due to inactivity.%s\n", "\033[31m", "\033[0m")
+				fmt.Printf("%sSession expired due to inactivity.%s\n", errorColor(), resetColor())
 				break
 			}
 
@@ -89,7 +91,7 @@ func main() {
 			switch choice {
 			case 1:
 				clearScreen()
-				//fmt.Printf("%sWaring%s: Your passwords will be displayed in plain text.\n", "\033[31m", "\033[0m")
+				//fmt.Printf("%sWaring%s: Your passwords will be displayed in plain text.\n", errorColor(), resetColor())
 
 				passwords, err := checkPasswords()
 				if err != nil {
@@ -127,7 +129,7 @@ func main() {
 						}
 						err = revealPassword(passwords)
 						if err != nil {
-							fmt.Printf("%sError:%s %s\n", "\033[31m", "\033[0m", err)
+							fmt.Printf("%sError:%s %s\n", errorColor(), resetColor(), err)
 						}
 					case 2:
 						continue
@@ -142,7 +144,7 @@ func main() {
 				clearScreen()
 				passwords, err := checkPasswords()
 				if err != nil && err.Error() != "no passwords saved" {
-					fmt.Printf("%sError:%s %s\n", "\033[31m", "\033[0m", err)
+					fmt.Printf("%sError:%s %s\n", errorColor(), resetColor(), err)
 					break
 				}
 
@@ -157,7 +159,7 @@ func main() {
 				clearScreen()
 				passwords, err := checkPasswords()
 				if err != nil && err.Error() != "no passwords saved" {
-					fmt.Printf("%sError:%s %s\n", "\033[31m", "\033[0m", err)
+					fmt.Printf("%sError:%s %s\n", errorColor(), resetColor(), err)
 					break
 				}
 				err = deletePassword(passwords)
@@ -171,7 +173,7 @@ func main() {
 				clearScreen()
 				passwords, err := checkPasswords()
 				if err != nil && err.Error() != "no passwords saved" {
-					fmt.Printf("%sError:%s %s\n", "\033[31m", "\033[0m", err)
+					fmt.Printf("%sError:%s %s\n", errorColor(), resetColor(), err)
 					break Loop
 				}
 				found := searchPassword(passwords)
@@ -185,7 +187,7 @@ func main() {
 						auth, _ = AuthenticateUser()
 					}
 					if !auth {
-						fmt.Printf("Too many %sfailed%s attempts.\n", "\033[31m", "\033[0m")
+						fmt.Printf("Too many %sfailed%s attempts.\n", errorColor(), resetColor())
 						return
 					}
 					if err != nil {
@@ -222,7 +224,7 @@ func main() {
 						}
 						err = revealPassword(passwords)
 						if err != nil {
-							fmt.Printf("%sError:%s %s\n", "\033[31m", "\033[0m", err)
+							fmt.Printf("%sError:%s %s\n", errorColor(), resetColor(), err)
 						}
 					case 2:
 						continue
@@ -238,7 +240,7 @@ func main() {
 				clearScreen()
 				passwords, err := checkPasswords()
 				if err != nil && err.Error() != "no passwords saved" {
-					fmt.Printf("%sError:%s %s\n", "\033[31m", "\033[0m", err)
+					fmt.Printf("%sError:%s %s\n", errorColor(), resetColor(), err)
 					break Loop
 				}
 				err = modifyPassword(passwords)
@@ -252,7 +254,7 @@ func main() {
 				clearScreen()
 				err := changeMasterPassword()
 				if err != nil {
-					fmt.Printf("%sError changing master password:%s %s\n", "\033[31m", "\033[0m", err)
+					fmt.Printf("%sError changing master password:%s %s\n", errorColor(), resetColor(), err)
 				} else {
 					fmt.Println("Master password changed successfully.")
 				}

@@ -102,9 +102,9 @@ func setupMasterPassword(renew bool) error {
 		}
 	}
 
-	fmt.Printf("*** Welcome to %sGoManager CLI%s, the command line tool to securely store all of your credentials\n", "\033[36m", "\033[0m")
+	fmt.Printf("*** Welcome to %sGoManager CLI%s, the command line tool to securely store all of your credentials\n", accentColor(), resetColor())
 	fmt.Println("*** For the first start you will have to set a master password, that will allow you to access the application")
-	fmt.Printf("*** Be %sVERY%s careful, as if you loose this password, you will no longer be able to access the other passwords\n", "\033[31m", "\033[0m")
+	fmt.Printf("*** Be %sVERY%s careful, as if you loose this password, you will no longer be able to access the other passwords\n", errorColor(), resetColor())
 
 	password, err := ReadPassword("Master Password: ")
 	if err != nil {
@@ -112,7 +112,7 @@ func setupMasterPassword(renew bool) error {
 	}
 
 	for len(password) < 12 {
-		fmt.Printf("%sError: Master password must be at least 12 characters%s\n", "\033[31m", "\033[0m")
+		fmt.Printf("%sError: Master password must be at least 12 characters%s\n", errorColor(), resetColor())
 		password, err = ReadPassword("Master Password: ")
 		if err != nil {
 			return err
@@ -127,9 +127,9 @@ func setupMasterPassword(renew bool) error {
 	if !bytes.Equal(password, confirmation) {
 		zeroBytes(password)
 		zeroBytes(confirmation)
-		return fmt.Errorf("passwords do %snot%s match", "\033[31m", "\033[0m")
+		return fmt.Errorf("passwords do %snot%s match", errorColor(), resetColor())
 	} else {
-		fmt.Printf("%sMaster password set successfully!%s\n\n", "\033[32m", "\033[0m")
+		fmt.Printf("%sMaster password set successfully!%s\n\n", successColor(), resetColor())
 	}
 
 	for i := range confirmation {
@@ -230,7 +230,7 @@ func savePassword(passwords []Password) error {
 	newPassword := Password{}
 	reader := bufio.NewReader(os.Stdin)
 
-	fmt.Printf("Enter %sservice%s: ", "\033[36m", "\033[0m")
+	fmt.Printf("Enter %sservice%s: ", accentColor(), resetColor())
 	input, err := readLine(reader)
 	if err != nil {
 		return err
@@ -242,7 +242,7 @@ func savePassword(passwords []Password) error {
 	}
 	newPassword.Service = string(service)
 
-	fmt.Printf("Enter %susername%s: ", "\033[36m", "\033[0m")
+	fmt.Printf("Enter %susername%s: ", accentColor(), resetColor())
 	input, err = readLine(reader)
 	if err != nil {
 		return err
@@ -621,7 +621,7 @@ func changeMasterPassword() error {
 			return err
 		}
 
-		fmt.Printf("%sMaster password changed successfully!%s\n", "\033[32m", "\033[0m")
+		fmt.Printf("%sMaster password changed successfully!%s\n", successColor(), resetColor())
 		fmt.Printf("Your %d password(s) have been re-encrypted with the new master password\n", len(passwords))
 		return nil
 
@@ -825,20 +825,20 @@ func revealPassword(passwords []Password) error {
 		}
 		selectedPassword := foundPasswords[choice-1]
 
-		fmt.Printf("\n%sWarning:%s Revealing passwords can be risky. Make sure no one is looking at your screen.\n", "\033[31m", "\033[0m")
+		fmt.Printf("\n%sWarning:%s Revealing passwords can be risky. Make sure no one is looking at your screen.\n", errorColor(), resetColor())
 		time.Sleep(5 * time.Second)
 
-		fmt.Printf("Password for service %s'%s'%s and username %s'%s'%s : %s\n", "\033[32m", selectedPassword.Service, "\033[0m", "\033[32m", selectedPassword.Username, "\033[0m", selectedPassword.Password)
-		fmt.Printf("%sThis password will be hidden again in 10 seconds%s\n", "\033[31m", "\033[0m")
+		fmt.Printf("Password for service %s'%s'%s and username %s'%s'%s : %s\n", successColor(), selectedPassword.Service, resetColor(), successColor(), selectedPassword.Username, resetColor(), selectedPassword.Password)
+		fmt.Printf("%sThis password will be hidden again in 10 seconds%s\n", errorColor(), resetColor())
 		time.Sleep(10 * time.Second)
 		clearScreen()
 
 		return nil
 	} else {
-		fmt.Printf("\n%sWarning:%s Revealing passwords can be risky. Make sure no one is looking at your screen.\n", "\033[31m", "\033[0m")
+		fmt.Printf("\n%sWarning:%s Revealing passwords can be risky. Make sure no one is looking at your screen.\n", errorColor(), resetColor())
 		time.Sleep(5 * time.Second)
-		fmt.Printf("Password for service %s'%s'%s and username %s'%s'%s : %s\n", "\033[32m", foundPasswords[0].Service, "\033[0m", "\033[32m", foundPasswords[0].Username, "\033[0m", foundPasswords[0].Password)
-		fmt.Printf("%sThis password will be hidden again in 10 seconds%s\n", "\033[31m", "\033[0m")
+		fmt.Printf("Password for service %s'%s'%s and username %s'%s'%s : %s\n", successColor(), foundPasswords[0].Service, resetColor(), successColor(), foundPasswords[0].Username, resetColor(), foundPasswords[0].Password)
+		fmt.Printf("%sThis password will be hidden again in 10 seconds%s\n", errorColor(), resetColor())
 		time.Sleep(10 * time.Second)
 		clearScreen()
 		return nil

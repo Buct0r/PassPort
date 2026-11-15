@@ -238,26 +238,57 @@ PassPort/
 │   ├── encrypt.go
 │   ├── functions.go
 │   └── ...
+├── internal/theme/      # Shared theme + config package (no Fyne)
+│   ├── config.go
+│   ├── defaults.go
+│   └── ...
 ├── go.mod              # Go module definition
 └── config.json         # Configuration file
 ```
 
 ## Configuration
 
+PassPort reads `config.json` from (in order): the executable's directory, the working directory, then the platform config directory. On first run a full template with 8 built-in themes is written automatically; older `{"theme": "..."}` configs are migrated in place.
+
 ### Theme
 
-Customize the application theme by editing `config.json`:
+Choose the active theme and customize any color. Colors are keyed by Fyne's theme color names (plus the custom `cardBackground` key). Any key you omit falls back to Fyne's default, so themes can be as small or as complete as you like.
 
 ```json
 {
-  "theme": "CustomTheme"
+  "theme": "CustomTheme",
+  "themes": {
+    "CustomTheme": {
+      "background": "#011627",
+      "foreground": "#E6F1FF",
+      "primary": "#00A6FB",
+      "cardBackground": "#0D2137",
+      "success": "#3DDC97",
+      "error": "#FF5C5C",
+      "warning": "#FFC857"
+    }
+  },
+  "cli": {
+    "accent": "#00BCD4",
+    "error": "#F44336",
+    "success": "#4CAF50",
+    "warning": "#FFC107"
+  }
 }
 ```
 
+Bundled themes: `CustomTheme`, `DarkTheme`, `LightTheme`, `NordTheme`, `DraculaTheme`, `GruvboxDark`, `SolarizedLight`, `MonokaiTheme`.
+
+**Making your own theme:** copy any bundled theme from `config.json`, give it a new name under `themes`, tweak the hex colors, then set `"theme"` to that name. Restart the app to apply. In the GUI you can also switch themes live from **Settings → Appearance**.
+
+Common keys: `background`, `foreground`, `primary`, `button`, `inputBackground`, `inputBorder`, `hover`, `pressed`, `selection`, `separator`, `shadow`, `success`, `error`, `warning`, `cardBackground`.
+
+The `cli` section controls the terminal colors used by the CLI. Colors degrade to the nearest 16-color ANSI value on terminals without truecolor, and are disabled entirely when `NO_COLOR` is set.
+
 ### Data Storage
 
-- Master password: `master.key` (stored in user's home directory)
-- Encrypted vault: `SECRET` file (stored in user's home directory)
+- Master password: `master.key` (stored in the platform config directory)
+- Encrypted vault: `SECRET` file (stored in the platform config directory)
 
 ## Development
 
@@ -304,6 +335,6 @@ PassPort is provided as-is. While security has been prioritized, users should re
 
 ---
 
-**Version**: 0.4.0
+**Version**: 1.0.0
 **Last Updated**: June 2026  
 **Maintainer**: Buct0r

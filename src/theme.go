@@ -5,139 +5,74 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/theme"
+
+	sharedtheme "github.com/Buct0r/PassPort/internal/theme"
 )
 
-/*
-
-type Theme struct {
-	Theme  string                       `json:"theme"`
-	Themes map[string]map[string]string `json:"themes"`
+// UserTheme adapts a shared theme palette (a map of hex colors) to Fyne's
+// fyne.Theme interface. Any color that is absent from the palette falls back
+// to Fyne's default theme, so a theme only needs to define what it changes.
+type UserTheme struct {
+	colors sharedtheme.Theme
 }
 
-func getConfig(scheme string) error {
-
-	data, err := os.ReadFile(getConfigPath())
-	if err != nil {
-		return err
+// NewUserTheme wraps a shared palette in a Fyne theme.
+func NewUserTheme(t sharedtheme.Theme) *UserTheme {
+	if t == nil {
+		t = sharedtheme.Theme{}
 	}
-	var cfg Theme
-	if string(data) == "" {
-		if err := json.Unmarshal([]byte(scheme), &cfg); err != nil {
-			fmt.Println("Error loading config, check your JSON syntax\nerror:", err)
-		}
-	} else {
-		file, err := os.Open(getConfigPath())
-		if err != nil {
-			fmt.Println("Error opening config file") //or using default config
-		}
-
-		defer func() {
-			if err := file.Close(); err != nil {
-				fmt.Println("Error closing config file:", err)
-			}
-		}()
-
-		if err := json.NewDecoder(file).Decode(&cfg); err != nil {
-			fmt.Println("Error loading config, check your JSON syntax\nerror:", err)
-		}
-	}
-
-	selectedTheme := cfg.Themes[cfg.Theme]
-	for key, value := range selectedTheme {
-		selectedTheme[key] = value
-	}
-
-	return nil
-}
-*/
-
-type CustomTheme struct{}
-
-func (c *CustomTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) color.Color {
-	switch name {
-	case theme.ColorNameBackground:
-		return color.RGBA{R: 1, G: 22, B: 39, A: 255}
-	case theme.ColorNameOverlayBackground:
-		return color.RGBA{R: 10, G: 30, B: 50, A: 220}
-	default:
-		return theme.DefaultTheme().Color(name, variant)
-	}
+	return &UserTheme{colors: t}
 }
 
-func (c *CustomTheme) Icon(name fyne.ThemeIconName) fyne.Resource {
+// Color resolves a Fyne color name against the palette, falling back to the
+// Fyne default when the key is missing or invalid.
+func (u *UserTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) color.Color {
+	if c, ok := u.colors.Color(string(name)); ok {
+		return c
+	}
+	return theme.DefaultTheme().Color(name, variant)
+}
+
+// CardBackground returns the custom password-card background color, falling
+// back to the app background when the theme does not define one.
+func (u *UserTheme) CardBackground() color.Color {
+	if c, ok := u.colors.Color(sharedtheme.CardBackgroundKey); ok {
+		return c
+	}
+	return theme.DefaultTheme().Color(theme.ColorNameBackground, theme.VariantDark)
+}
+
+// Foreground is the primary text color.
+func (u *UserTheme) Foreground() color.Color {
+	return u.Color(theme.ColorNameForeground, theme.VariantDark)
+}
+
+// Muted is a lower-emphasis text color, used for captions and subtitles.
+func (u *UserTheme) Muted() color.Color {
+	return u.Color(theme.ColorNamePlaceHolder, theme.VariantDark)
+}
+
+// Primary is the accent color.
+func (u *UserTheme) Primary() color.Color {
+	return u.Color(theme.ColorNamePrimary, theme.VariantDark)
+}
+
+// Separator is the color for divider lines and borders.
+func (u *UserTheme) Separator() color.Color {
+	return u.Color(theme.ColorNameSeparator, theme.VariantDark)
+}
+
+// Icon delegates to Fyne's default icon set.
+func (u *UserTheme) Icon(name fyne.ThemeIconName) fyne.Resource {
 	return theme.DefaultTheme().Icon(name)
 }
 
-func (c *CustomTheme) Font(style fyne.TextStyle) fyne.Resource {
+// Font delegates to Fyne's default font.
+func (u *UserTheme) Font(style fyne.TextStyle) fyne.Resource {
 	return theme.DefaultTheme().Font(style)
 }
 
-func (c *CustomTheme) Size(name fyne.ThemeSizeName) float32 {
-	return theme.DefaultTheme().Size(name)
-}
-
-func (c *CustomTheme) BackgroundColor() color.Color {
-	return theme.Color(theme.ColorNameBackground)
-}
-
-type DarkTheme struct{}
-
-func (c *DarkTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) color.Color {
-	switch name {
-	case theme.ColorNameBackground:
-		return color.RGBA{R: 0, G: 0, B: 0, A: 255}
-	default:
-		return theme.DefaultTheme().Color(name, variant)
-	}
-}
-
-func (c *DarkTheme) Icon(name fyne.ThemeIconName) fyne.Resource {
-	return theme.DefaultTheme().Icon(name)
-}
-
-func (c *DarkTheme) Font(style fyne.TextStyle) fyne.Resource {
-	return theme.DefaultTheme().Font(style)
-}
-
-func (c *DarkTheme) Size(name fyne.ThemeSizeName) float32 {
-	return theme.DefaultTheme().Size(name)
-}
-
-type LightTheme struct{}
-
-func (c *LightTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) color.Color {
-	switch name {
-	case theme.ColorNameBackground:
-		return color.RGBA{R: 255, G: 255, B: 255, A: 255}
-	case theme.ColorNameOverlayBackground:
-		return color.RGBA{R: 240, G: 240, B: 240, A: 220}
-	case theme.ColorNameButton:
-		return color.RGBA{R: 230, G: 230, B: 230, A: 255}
-	case theme.ColorNameHover:
-		return color.RGBA{R: 200, G: 200, B: 200, A: 255}
-	case theme.ColorNameForeground:
-		return color.RGBA{R: 0, G: 0, B: 0, A: 255}
-	case theme.ColorNamePrimary:
-		return color.RGBA{R: 0, G: 100, B: 200, A: 255}
-	case theme.ColorNameError:
-		return color.RGBA{R: 200, G: 0, B: 0, A: 255}
-	case theme.ColorNameInputBackground:
-		return color.RGBA{R: 200, G: 200, B: 200, A: 255}
-	case theme.ColorNamePlaceHolder:
-		return color.RGBA{R: 0, G: 0, B: 0, A: 128}
-	default:
-		return theme.DefaultTheme().Color(name, variant)
-	}
-}
-
-func (c *LightTheme) Icon(name fyne.ThemeIconName) fyne.Resource {
-	return theme.DefaultTheme().Icon(name)
-}
-
-func (c *LightTheme) Font(style fyne.TextStyle) fyne.Resource {
-	return theme.DefaultTheme().Font(style)
-}
-
-func (c *LightTheme) Size(name fyne.ThemeSizeName) float32 {
+// Size delegates to Fyne's default sizing.
+func (u *UserTheme) Size(name fyne.ThemeSizeName) float32 {
 	return theme.DefaultTheme().Size(name)
 }

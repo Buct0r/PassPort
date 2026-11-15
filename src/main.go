@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+
+	sharedtheme "github.com/Buct0r/PassPort/internal/theme"
 )
 
 func main() {
@@ -203,7 +205,7 @@ func main() {
 	} else {
 
 		if !HasDesktopEnvironment() {
-			fmt.Printf("%sError%s: no desktop environment detected, cannot run GUI mode", "\033[31m", "\033[0m")
+			fmt.Printf("%sError%s: no desktop environment detected, cannot run GUI mode\n", sharedtheme.ANSIColor(sharedtheme.DefaultConfig().CLI.Error, 31), sharedtheme.Reset())
 		} else {
 			hideConsole()
 			gui()

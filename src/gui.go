@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"image/color"
+	"math"
 	"os"
 	"path/filepath"
 	"time"
@@ -17,26 +17,17 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+
+	sharedtheme "github.com/Buct0r/PassPort/internal/theme"
 )
 
-func getCardBackground(themeName string) *canvas.Rectangle {
-	switch themeName {
-	case "DarkTheme":
-		return canvas.NewRectangle(color.RGBA{R: 30, G: 30, B: 30, A: 255})
-	case "LightTheme":
-		return canvas.NewRectangle(color.RGBA{R: 220, G: 220, B: 220, A: 255})
-	case "CustomTheme":
-		return canvas.NewRectangle(color.RGBA{R: 30, G: 30, B: 30, A: 255})
-	default:
-		return canvas.NewRectangle(color.RGBA{R: 20, G: 40, B: 60, A: 255})
-	}
-}
+const version = "1.0.0" //TODO: keep in sync with cli/cli.go
 
 var guiLimiter = NewRateLimiter(5, 60*time.Second) // Allow 5 attempts per minute for GUI
 
 func authWindow(a fyne.App, onComplete func(bool)) {
 	w := a.NewWindow("PassPort: Authentication")
-	w.Resize(fyne.NewSize(500, 800))
+	w.Resize(fyne.NewSize(460, 640))
 
 	completed := false
 
@@ -56,13 +47,13 @@ func authWindow(a fyne.App, onComplete func(bool)) {
 
 	img := canvas.NewImageFromResource(resourceLogoPng)
 	img.FillMode = canvas.ImageFillContain
-	img.SetMinSize(fyne.NewSize(500, 500))
+	img.SetMinSize(fyne.NewSize(180, 180))
 
 	if FileExists(path) {
 		passwordEntry := widget.NewPasswordEntry()
 		passwordEntry.SetPlaceHolder("Enter Master Password")
 
-		submitButton := widget.NewButton("Submit", func() {
+		submitButton := widget.NewButton("Unlock", func() {
 			if locked, remaining := guiLimiter.IsLocked(); locked {
 				seconds := int(remaining.Seconds())
 				dialog.ShowError(
@@ -85,9 +76,11 @@ func authWindow(a fyne.App, onComplete func(bool)) {
 					seconds := int(remaining.Seconds())
 					dialog.ShowInformation("Error", fmt.Sprintf("Too many failed attempts. Locked for %d second(s).", seconds), w)
 					time.AfterFunc(2*time.Second, func() {
-						completed = true
-						onComplete(false)
-						a.Quit()
+						fyne.Do(func() {
+							completed = true
+							onComplete(false)
+							a.Quit()
+						})
 					})
 					return
 				}
@@ -100,18 +93,29 @@ func authWindow(a fyne.App, onComplete func(bool)) {
 				}
 			}
 		})
+		submitButton.Importance = widget.HighImportance
 
 		passwordEntry.OnSubmitted = func(s string) {
 			submitButton.OnTapped()
 		}
 
-		w.SetContent(container.NewVBox(
-			container.NewCenter(widget.NewRichTextFromMarkdown("# PassPort")),
-			container.NewStack(img),
-			container.NewCenter(widget.NewRichTextFromMarkdown("## Please enter your master password to continue:")),
+		title := canvas.NewText("PassPort", theme.Color(theme.ColorNamePrimary))
+		title.TextSize = 32
+		title.TextStyle = fyne.TextStyle{Bold: true}
+
+		subtitle := widget.NewLabel("Enter your master password to continue")
+		subtitle.Alignment = fyne.TextAlignCenter
+
+		form := container.NewVBox(
+			container.NewCenter(img),
+			container.NewCenter(title),
+			container.NewCenter(subtitle),
+			widget.NewSeparator(),
 			passwordEntry,
 			submitButton,
-		))
+		)
+
+		w.SetContent(container.NewPadded(container.NewCenter(form)))
 	} else {
 
 		if FileExists(filename) && filename != "" {
@@ -119,10 +123,11 @@ func authWindow(a fyne.App, onComplete func(bool)) {
 		}
 
 		password := widget.NewPasswordEntry()
+		password.SetPlaceHolder("Master Password")
 		confirm := widget.NewPasswordEntry()
 		confirm.SetPlaceHolder("Confirm Master Password")
 
-		saveBtn := widget.NewButton("Save", func() {
+		saveBtn := widget.NewButton("Create Vault", func() {
 			if password.Text == "" || password.Text != confirm.Text {
 				dialog.ShowError(fmt.Errorf("Passwords do not match or are empty"), w)
 			} else if len(password.Text) < 12 {
@@ -137,16 +142,29 @@ func authWindow(a fyne.App, onComplete func(bool)) {
 				onComplete(true)
 			}
 		})
+		saveBtn.Importance = widget.HighImportance
 
-		w.SetContent(container.NewVBox(
-			container.NewCenter(widget.NewRichTextFromMarkdown("# PassPort")),
-			container.NewStack(img),
-			container.NewCenter(widget.NewRichTextFromMarkdown("## Welcome to PassPort! It looks like this is your first time using the application. Let's set up your master password to get started.")),
-			container.NewCenter(widget.NewRichTextFromMarkdown("### Setup your master password: ")),
+		title := canvas.NewText("Welcome to PassPort", theme.Color(theme.ColorNamePrimary))
+		title.TextSize = 28
+		title.TextStyle = fyne.TextStyle{Bold: true}
+
+		subtitle := widget.NewLabel("This looks like your first launch. Create a master password to get started.")
+		subtitle.Alignment = fyne.TextAlignCenter
+		subtitle.Wrapping = fyne.TextWrapWord
+
+		form := container.NewVBox(
+			container.NewCenter(img),
+			container.NewCenter(title),
+			container.NewCenter(subtitle),
+			widget.NewSeparator(),
+			widget.NewLabel("Master Password"),
 			password,
+			widget.NewLabel("Confirm Master Password"),
 			confirm,
 			saveBtn,
-		))
+		)
+
+		w.SetContent(container.NewPadded(container.NewCenter(form)))
 
 	}
 	w.Show()
@@ -185,71 +203,30 @@ func authenticate(password string) bool {
 	return true
 }
 
-func saveConfig(theme string) error {
-
-	data, err := os.Open(getConfigPath())
-	if err != nil {
-		return fmt.Errorf("error opening config file: %v", err)
+func filterPasswords(passwords []Password, term string) []Password {
+	if term == "" {
+		return passwords
 	}
-	defer data.Close()
-
-	type Config struct {
-		Theme string `json:"theme"`
+	lower := bytes.ToLower([]byte(term))
+	var out []Password
+	for _, p := range passwords {
+		if bytes.Contains(bytes.ToLower([]byte(p.Service)), lower) {
+			out = append(out, p)
+		}
 	}
-	var cfg Config
-
-	if err := json.NewDecoder(data).Decode(&cfg); err != nil {
-		return fmt.Errorf("error decoding config file: %v", err)
-	}
-
-	cfg.Theme = theme
-
-	configFile, err := os.Create(getConfigPath())
-	if err != nil {
-		return fmt.Errorf("error creating config file: %v", err)
-	}
-	defer configFile.Close()
-	encoder := json.NewEncoder(configFile)
-	encoder.SetIndent("", "  ")
-	if err := encoder.Encode(cfg); err != nil {
-		return fmt.Errorf("error encoding config file: %v", err)
-	}
-	return nil
-
+	return out
 }
 
 func runFyneGUI() {
 
 	start := time.Now()
 
-	path := getConfigPath()
-
-	type Config struct {
-		Theme string `json:"theme"`
-	}
-
-	var cfg Config
-	if path != "" {
-		file, err := os.Open(path)
-		if err != nil {
-			fmt.Println("Error opening config file")
-			cfg.Theme = "DarkTheme" // default
-		} else {
-			defer file.Close()
-			if err := json.NewDecoder(file).Decode(&cfg); err != nil {
-				fmt.Println("Failed to read config file, using default config")
-				cfg.Theme = "DarkTheme" // default
-			}
-		}
-	} else {
-		cfg.Theme = "DarkTheme"
-	}
+	cfg := sharedtheme.LoadConfig()
 
 	a := app.New()
 	icon := fyne.NewStaticResource("logo.png", resourceLogoPngData)
 	a.SetIcon(icon)
-	selectedTheme := getThemeByName(cfg.Theme)
-	a.Settings().SetTheme(selectedTheme)
+	a.Settings().SetTheme(NewUserTheme(cfg.Active()))
 
 	authWindow(a, func(authenticated bool) {
 		if !authenticated {
@@ -259,184 +236,81 @@ func runFyneGUI() {
 
 		w := a.NewWindow("PassPort")
 
-		w.Resize(fyne.NewSize(1060, 680))
+		w.Resize(fyne.NewSize(1060, 720))
 
 		var searchTerm string
 		var refreshUI func()
 		refreshUI = func() {
+			th := NewUserTheme(cfg.Active())
+
 			passwords, err := checkPasswords()
 			if err != nil && err.Error() != "no passwords saved" && len(passwords) != 0 {
 				dialog.ShowError(fmt.Errorf("Error reading saved password: %s", err), w)
 				passwords = []Password{}
 			}
 
-			containers := container.NewVBox()
-			title := widget.NewRichTextFromMarkdown("# Saved Passwords: ")
-			titleContainer := container.NewVBox(title)
-			titleCenter := container.NewCenter(titleContainer)
-			newButton := widget.NewButtonWithIcon("", theme.ContentAddIcon(), func() {
+			// Header: application title and settings.
+			title := canvas.NewText("PassPort", th.Primary())
+			title.TextSize = 26
+			title.TextStyle = fyne.TextStyle{Bold: true}
+
+			settingsButton := widget.NewButtonWithIcon("", theme.SettingsIcon(), func() {
+				showSettings(a, w, cfg, &start, refreshUI)
+			})
+			header := container.NewBorder(nil, nil, title, settingsButton)
+
+			// Toolbar: add action and live search.
+			addButton := widget.NewButtonWithIcon("Add Password", theme.ContentAddIcon(), func() {
 				addPasswordGUI(passwords, w, refreshUI, a, &start)
 			})
-			editButton := widget.NewButton("Edit master password", func() {
-				editMasterPasswordGUI(w, func(success bool) {
-					if success {
-						dialog.ShowInformation("Success", "Master password updated successfully", w)
-					} else {
-						dialog.ShowError(fmt.Errorf("Failed to update master password"), w)
-					}
-				}, a, &start)
-			})
-			modal := widget.NewModalPopUp(widget.NewLabel(""), w.Canvas()) //dummy modal to be replaced
-			settingsContent := container.NewVBox(
-				widget.NewLabel("Select Theme:"),
-				widget.NewButton("Custom Theme", func() {
-					a.Settings().SetTheme(&CustomTheme{})
-					cfg.Theme = "CustomTheme"
-					saveConfig(cfg.Theme)
-					refreshUI()
-				}),
-				widget.NewButton("Dark Theme", func() {
-					a.Settings().SetTheme(&DarkTheme{})
-					cfg.Theme = "DarkTheme"
-					saveConfig(cfg.Theme)
-					refreshUI()
-				}),
-				widget.NewButton("Light Theme", func() {
-					a.Settings().SetTheme(&LightTheme{})
-					cfg.Theme = "LightTheme"
-					saveConfig(cfg.Theme)
-					refreshUI()
-				}),
-				widget.NewLabel("Change master password: "),
-				editButton,
-				widget.NewLabel("Logout"),
-				widget.NewButton("Logout", func() {
-					dialog.ShowConfirm("Confirm Logout", "Are you sure you want to logout?", func(confirmed bool) {
-						if confirmed {
-							w.Hide()
-							authWindow(a, func(authenticated bool) {
-								if authenticated {
-									w.Show()
-									refreshUI()
-								} else {
-									a.Quit()
-								}
-							})
-						}
-					}, w)
-				}),
-				widget.NewButton("Close", func() {
-					modal.Hide()
-				}),
-				widget.NewLabel("PassPort v0.4.0 developed by Buct0r"), //TODO: Update at every release
-			)
-			settingsButton := widget.NewButtonWithIcon("", theme.SettingsIcon(), func() {
-				modal = widget.NewModalPopUp(settingsContent, w.Canvas())
-				modal.Show()
-			})
+			addButton.Importance = widget.HighImportance
 
 			searchBar := widget.NewEntry()
 			searchBar.SetPlaceHolder("Search by service name...")
-			searchButton := widget.NewButtonWithIcon("", theme.SearchIcon(), func() {
-				s := searchBar.Text
-				if s == "" {
-					searchTerm = ""
-					refreshUI()
-					return
-				}
-				var found []Password
-				for _, p := range passwords {
-					if bytes.Contains(bytes.ToLower([]byte(p.Service)), bytes.ToLower([]byte(s))) {
-						found = append(found, p)
-					}
-				}
-				if len(found) == 0 {
-					dialog.ShowInformation("No Results", "No passwords found matching that service name.", w)
-					return
-				}
-				searchTerm = s
-				refreshUI()
+			searchBar.Text = searchTerm
 
-			})
+			results := container.NewStack()
 
-			searchContainer := container.NewBorder(nil, nil, nil, searchButton, searchBar)
-			searchBar.OnSubmitted = func(s string) {
-				searchButton.OnTapped()
-			}
-			titleContainer.Add(newButton)
-			titleContainer.Add(settingsButton)
-			titleContainer.Add(searchContainer)
-			containers.Add(titleCenter)
-			//buttonsContainer := container.NewHBox()
-			//containers.Add(buttonsContainer)
-			cardContainer := container.NewGridWrap(fyne.NewSize(300, 200))
-			for _, p := range passwords {
-				if searchTerm != "" {
-					if !bytes.Contains(bytes.ToLower([]byte(p.Service)), bytes.ToLower([]byte(searchTerm))) {
-						continue
-					}
-				}
-				pwd := p
-				card := widget.NewCard(pwd.Service, "Username: "+pwd.Username, container.NewVBox(
-					widget.NewRichTextFromMarkdown("**Last edited: "+pwd.Created+"**"),
-					container.NewHBox(widget.NewButton("Reveal", func() {
-
-						start = time.Now()
-
-						password := pwd.Password
-						passwordBytes := []byte(password)
-						modal := widget.NewModalPopUp(widget.NewLabel(""), w.Canvas()) //dummy modal to be replaced
-
-						content := container.NewHBox(widget.NewLabel("Password: "+password), widget.NewButtonWithIcon("", theme.ContentCopyIcon(), func() {
-							a.Clipboard().SetContent(password)
-						}), widget.NewButtonWithIcon("", theme.WindowCloseIcon(), func() {
-							modal.Hide()
-							zeroBytes(passwordBytes)
-							a.Clipboard().SetContent("")
-						}))
-
-						modal = widget.NewModalPopUp(content, w.Canvas())
-
-						if time.Since(start) > 15*time.Minute {
-							dialog.ShowInformation("Session Expired", "Your session has expired due to inactivity. Please re-authenticate to continue.", w)
-							authWindow(a, func(authenticated bool) {
-								if authenticated {
-									modal.Show()
-									time.AfterFunc(5*time.Second, func() {
-										modal.Hide()
-										zeroBytes(passwordBytes)
-										a.Clipboard().SetContent("") //TODO: Make this a feature that can be toggled
-									})
-								} else {
-									a.Quit()
-								}
-							})
-						} else {
-							// Session still valid, show password immediately
-							modal.Show()
-							time.AfterFunc(5*time.Second, func() {
-								modal.Hide()
-								zeroBytes(passwordBytes)
-								a.Clipboard().SetContent("")
-							})
+			var updateResults func()
+			updateResults = func() {
+				th := NewUserTheme(cfg.Active())
+				if len(passwords) == 0 {
+					results.Objects = []fyne.CanvasObject{emptyState(th, func() {
+						addPasswordGUI(passwords, w, refreshUI, a, &start)
+					})}
+				} else {
+					filtered := filterPasswords(passwords, searchTerm)
+					if len(filtered) == 0 {
+						msg := canvas.NewText(fmt.Sprintf("No passwords match %q", searchTerm), th.Muted())
+						msg.TextSize = 16
+						results.Objects = []fyne.CanvasObject{container.NewCenter(msg)}
+					} else {
+						grid := container.New(newCenteredGridLayout(fyne.NewSize(300, 210)))
+						for _, p := range filtered {
+							pwd := p
+							grid.Add(passwordCard(pwd, th, w, a, passwords, refreshUI, &start))
 						}
-
-					}),
-						widget.NewButton("Delete", func() {
-							deletePasswordGUI(passwords, w, pwd.Service, refreshUI, a, &start)
-						}),
-						widget.NewButton("Edit", func() {
-							editPasswordGUI(passwords, w, pwd.Service, refreshUI, a, &start)
-						}),
-					),
-				))
-				cardBg := getCardBackground(cfg.Theme)
-				cardBg.CornerRadius = 12
-				cardWithBg := container.New(layout.NewStackLayout(), cardBg, card)
-				cardContainer.Add(cardWithBg)
+						results.Objects = []fyne.CanvasObject{container.NewVScroll(container.NewPadded(grid))}
+					}
+				}
+				results.Refresh()
 			}
-			containers.Add(cardContainer)
-			w.SetContent(container.NewVScroll(containers))
+
+			searchBar.OnChanged = func(s string) {
+				searchTerm = s
+				updateResults()
+			}
+
+			toolbar := container.NewBorder(nil, nil, addButton, nil, searchBar)
+
+			top := container.NewVBox(
+				container.NewPadded(header),
+				container.NewPadded(toolbar),
+				widget.NewSeparator(),
+			)
+
+			updateResults()
+			w.SetContent(container.NewBorder(top, nil, nil, nil, results))
 		}
 
 		refreshUI()
@@ -446,17 +320,265 @@ func runFyneGUI() {
 	a.Run()
 }
 
-func getThemeByName(name string) fyne.Theme {
-	switch name {
-	case "CustomTheme":
-		return &CustomTheme{}
-	case "DarkTheme":
-		return &DarkTheme{}
-	case "LightTheme":
-		return &LightTheme{}
-	default:
-		return &CustomTheme{}
+// centeredGridLayout arranges fixed-size cells in rows that wrap to the
+// container width, centering each row so the leftover space is split evenly
+// between the left and right margins.
+type centeredGridLayout struct {
+	cell     fyne.Size
+	colCount int
+	rowCount int
+}
+
+func newCenteredGridLayout(cell fyne.Size) fyne.Layout {
+	return &centeredGridLayout{cell: cell, colCount: 1, rowCount: 1}
+}
+
+func (g *centeredGridLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	padding := theme.Padding()
+	g.colCount = 1
+	g.rowCount = 0
+
+	if size.Width > g.cell.Width {
+		g.colCount = int(math.Floor(float64(size.Width+padding) / float64(g.cell.Width+padding)))
 	}
+
+	rowWidth := float32(g.colCount)*g.cell.Width + float32(g.colCount-1)*padding
+	offset := (size.Width - rowWidth) / 2
+	if offset < 0 {
+		offset = 0
+	}
+
+	i, x, y := 0, offset, float32(0)
+	for _, child := range objects {
+		if !child.Visible() {
+			continue
+		}
+
+		if i%g.colCount == 0 {
+			g.rowCount++
+		}
+
+		child.Move(fyne.NewPos(x, y))
+		child.Resize(g.cell)
+
+		if (i+1)%g.colCount == 0 {
+			x = offset
+			y += g.cell.Height + padding
+		} else {
+			x += g.cell.Width + padding
+		}
+		i++
+	}
+}
+
+func (g *centeredGridLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	rows := g.rowCount
+	if rows < 1 {
+		rows = 1
+	}
+	return fyne.NewSize(g.cell.Width,
+		(g.cell.Height*float32(rows))+(float32(rows-1)*theme.Padding()))
+}
+
+func passwordCard(pwd Password, th *UserTheme, w fyne.Window, a fyne.App, passwords []Password, refreshUI func(), start *time.Time) fyne.CanvasObject {
+	bg := canvas.NewRectangle(th.CardBackground())
+	bg.CornerRadius = 12
+	bg.StrokeColor = th.Separator()
+	bg.StrokeWidth = 1
+
+	service := widget.NewLabelWithStyle(pwd.Service, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	service.SizeName = theme.SizeNameSubHeadingText
+	service.Truncation = fyne.TextTruncateEllipsis
+
+	username := widget.NewLabel(pwd.Username)
+	username.SizeName = theme.SizeNameCaptionText
+	username.Truncation = fyne.TextTruncateEllipsis
+
+	created := widget.NewLabel("Last edited: " + pwd.Created)
+	created.SizeName = theme.SizeNameCaptionText
+	created.Importance = widget.LowImportance
+
+	revealButton := widget.NewButton("Reveal", func() {
+		revealPasswordGUI(pwd, w, a, start)
+	})
+
+	editButton := widget.NewButton("Edit", func() {
+		editPasswordGUI(passwords, w, pwd.Service, refreshUI, a, start)
+	})
+
+	deleteButton := widget.NewButton("Delete", func() {
+		deletePasswordGUI(passwords, w, pwd.Service, refreshUI, a, start)
+	})
+	deleteButton.Importance = widget.DangerImportance
+
+	body := container.NewVBox(service, username, created)
+	buttons := container.NewGridWithColumns(3, revealButton, editButton, deleteButton)
+
+	content := container.NewVBox(
+		container.NewPadded(body),
+		layout.NewSpacer(),
+		container.NewPadded(buttons),
+	)
+
+	return container.NewStack(bg, content)
+}
+
+func emptyState(th *UserTheme, onAdd func()) fyne.CanvasObject {
+	icon := widget.NewIcon(theme.ContentAddIcon())
+
+	heading := widget.NewLabel("Your vault is empty")
+	heading.TextStyle = fyne.TextStyle{Bold: true}
+	heading.Alignment = fyne.TextAlignCenter
+	heading.SizeName = theme.SizeNameHeadingText
+
+	sub := widget.NewLabel("Add your first password to get started.")
+	sub.Alignment = fyne.TextAlignCenter
+	sub.Importance = widget.LowImportance
+
+	button := widget.NewButtonWithIcon("Add your first password", theme.ContentAddIcon(), onAdd)
+	button.Importance = widget.HighImportance
+
+	box := container.NewVBox(
+		container.NewCenter(icon),
+		container.NewCenter(heading),
+		container.NewCenter(sub),
+		container.NewCenter(button),
+	)
+	return container.NewCenter(box)
+}
+
+func showSettings(a fyne.App, w fyne.Window, cfg *sharedtheme.Config, start *time.Time, refreshUI func()) {
+	// Appearance
+	themeSelect := widget.NewSelect(cfg.ThemeNames(), func(name string) {
+		if name == "" || name == cfg.Theme {
+			return
+		}
+		cfg.Theme = name
+		if err := sharedtheme.SaveConfig(cfg); err != nil {
+			dialog.ShowError(fmt.Errorf("failed to save theme: %v", err), w)
+		}
+		a.Settings().SetTheme(NewUserTheme(cfg.Active()))
+		refreshUI()
+	})
+	themeSelect.SetSelected(cfg.Theme)
+	themeSelect.PlaceHolder = "Select a theme"
+
+	appearance := widget.NewCard("", "", container.NewVBox(
+		widget.NewLabelWithStyle("Appearance", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		widget.NewLabel("Choose a colour scheme. Add your own in config.json."),
+		themeSelect,
+	))
+
+	// Security
+	editMasterButton := widget.NewButton("Change master password", func() {
+		editMasterPasswordGUI(w, func(success bool) {
+			if success {
+				dialog.ShowInformation("Success", "Master password updated successfully", w)
+			} else {
+				dialog.ShowError(fmt.Errorf("Failed to update master password"), w)
+			}
+		}, a, start)
+	})
+
+	security := widget.NewCard("", "", container.NewVBox(
+		widget.NewLabelWithStyle("Security", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		editMasterButton,
+	))
+
+	var modal *widget.PopUp
+
+	// Session
+	logoutButton := widget.NewButton("Logout", func() {
+		dialog.ShowConfirm("Confirm Logout", "Are you sure you want to logout?", func(confirmed bool) {
+			if confirmed {
+				modal.Hide()
+				w.Hide()
+				authWindow(a, func(authenticated bool) {
+					if authenticated {
+						w.Show()
+						refreshUI()
+					} else {
+						a.Quit()
+					}
+				})
+			}
+		}, w)
+	})
+
+	session := widget.NewCard("", "", container.NewVBox(
+		widget.NewLabelWithStyle("Session", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		logoutButton,
+	))
+
+	// About
+	about := widget.NewCard("", "", container.NewVBox(
+		widget.NewLabelWithStyle("About", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		widget.NewLabel("PassPort v"+version+" developed by Buct0r"),
+	))
+
+	closeButton := widget.NewButton("Close", func() {
+		modal.Hide()
+	})
+
+	content := container.NewVBox(appearance, security, session, about, closeButton)
+
+	modal = widget.NewModalPopUp(container.NewPadded(content), w.Canvas())
+	modal.Resize(fyne.NewSize(460, 620))
+	modal.Show()
+}
+
+func revealPasswordGUI(pwd Password, w fyne.Window, a fyne.App, start *time.Time) {
+	if time.Since(*start) > 15*time.Minute {
+		dialog.ShowInformation("Session Expired", "Your session has expired due to inactivity. Please re-authenticate to continue.", w)
+		authWindow(a, func(authenticated bool) {
+			if authenticated {
+				*start = time.Now()
+				showPasswordModal(pwd, w, a)
+			} else {
+				a.Quit()
+			}
+		})
+		return
+	}
+
+	*start = time.Now()
+	showPasswordModal(pwd, w, a)
+}
+
+func showPasswordModal(pwd Password, w fyne.Window, a fyne.App) {
+	passwordBytes := []byte(pwd.Password)
+	var modal *widget.PopUp
+
+	passwordLabel := widget.NewLabel(pwd.Password)
+	passwordLabel.TextStyle = fyne.TextStyle{Monospace: true}
+	passwordLabel.Wrapping = fyne.TextWrapBreak
+
+	copyButton := widget.NewButtonWithIcon("Copy", theme.ContentCopyIcon(), func() {
+		a.Clipboard().SetContent(pwd.Password)
+	})
+
+	closeButton := widget.NewButton("Close", func() {
+		modal.Hide()
+		zeroBytes(passwordBytes)
+		a.Clipboard().SetContent("")
+	})
+
+	content := container.NewVBox(
+		widget.NewLabelWithStyle("Password for "+pwd.Service, fyne.TextAlignCenter, fyne.TextStyle{Bold: true}),
+		passwordLabel,
+		container.NewGridWithColumns(2, copyButton, closeButton),
+	)
+
+	modal = widget.NewModalPopUp(container.NewPadded(content), w.Canvas())
+	modal.Show()
+
+	time.AfterFunc(5*time.Second, func() {
+		fyne.Do(func() {
+			modal.Hide()
+			zeroBytes(passwordBytes)
+			a.Clipboard().SetContent("")
+		})
+	})
 }
 
 func deletePasswordGUI(passwords []Password, w fyne.Window, service string, onDelete func(), a fyne.App, start *time.Time) error {
@@ -619,22 +741,23 @@ func editPasswordGUI(passwords []Password, w fyne.Window, service string, onEdit
 		onEdit()
 		modal.Hide()
 	})
+	saveButton.Importance = widget.HighImportance
 
 	content := container.NewVBox(
-		widget.NewLabel("Edit Password Entry"),
-		widget.NewLabel("Service:"),
+		widget.NewLabelWithStyle("Edit Password Entry", fyne.TextAlignCenter, fyne.TextStyle{Bold: true}),
+		widget.NewLabel("Service"),
 		serviceEntry,
-		widget.NewLabel("Username:"),
+		widget.NewLabel("Username"),
 		usernameEntry,
-		widget.NewLabel("Password:"),
+		widget.NewLabel("Password"),
 		passwordEntry,
-		saveButton,
-		widget.NewButton("Close", func() {
+		container.NewGridWithColumns(2, saveButton, widget.NewButton("Close", func() {
 			modal.Hide()
-		}),
+		})),
 	)
 
-	modal = widget.NewModalPopUp(content, w.Canvas())
+	modal = widget.NewModalPopUp(container.NewPadded(content), w.Canvas())
+	modal.Resize(fyne.NewSize(420, 420))
 	modal.Show()
 
 	return nil
@@ -659,8 +782,10 @@ func addPasswordGUI(passwords []Password, w fyne.Window, onAdd func(), a fyne.Ap
 
 	serviceEntry := widget.NewEntry()
 	serviceEntry.SetText(newPassword.Service)
+	serviceEntry.SetPlaceHolder("e.g. GitHub")
 	usernameEntry := widget.NewEntry()
 	usernameEntry.SetText(newPassword.Username)
+	usernameEntry.SetPlaceHolder("e.g. user@example.com")
 	passwordEntry := widget.NewPasswordEntry()
 	passwordEntry.SetText(newPassword.Password)
 	date := time.Now().Format("2006-01-02 15:04:05")
@@ -712,6 +837,7 @@ func addPasswordGUI(passwords []Password, w fyne.Window, onAdd func(), a fyne.Ap
 		onAdd()
 		modal.Hide()
 	})
+	saveButton.Importance = widget.HighImportance
 
 	closeButton := widget.NewButton("Close", func() {
 		modal.Hide()
@@ -722,18 +848,18 @@ func addPasswordGUI(passwords []Password, w fyne.Window, onAdd func(), a fyne.Ap
 	}
 
 	content := container.NewVBox(
-		widget.NewLabel("Add New Password Entry"),
-		widget.NewLabel("Service:"),
+		widget.NewLabelWithStyle("Add New Password Entry", fyne.TextAlignCenter, fyne.TextStyle{Bold: true}),
+		widget.NewLabel("Service"),
 		serviceEntry,
-		widget.NewLabel("Username:"),
+		widget.NewLabel("Username"),
 		usernameEntry,
-		widget.NewLabel("Password:"),
+		widget.NewLabel("Password"),
 		passwordEntry,
-		saveButton,
-		closeButton,
+		container.NewGridWithColumns(2, saveButton, closeButton),
 	)
 
-	modal = widget.NewModalPopUp(content, w.Canvas())
+	modal = widget.NewModalPopUp(container.NewPadded(content), w.Canvas())
+	modal.Resize(fyne.NewSize(420, 420))
 	modal.Show()
 }
 
@@ -837,7 +963,7 @@ func editMasterPasswordGUI(w fyne.Window, onComplete func(bool), a fyne.App, sta
 			saveButton,
 		)
 
-		modal = widget.NewModalPopUp(content, w.Canvas())
+		modal = widget.NewModalPopUp(container.NewPadded(content), w.Canvas())
 		modal.Show()
 
 		return nil
@@ -958,18 +1084,18 @@ func editMasterPasswordGUI(w fyne.Window, onComplete func(bool), a fyne.App, sta
 		})
 
 		content := container.NewVBox(
-			widget.NewLabel("Edit Master Password"),
-			widget.NewLabel("New Password:"),
+			widget.NewLabelWithStyle("Edit Master Password", fyne.TextAlignCenter, fyne.TextStyle{Bold: true}),
+			widget.NewLabel("New Password"),
 			passwordEntry,
-			widget.NewLabel("Confirm Password:"),
+			widget.NewLabel("Confirm Password"),
 			confirmationEntry,
-			saveButton,
-			widget.NewButton("Close", func() {
+			container.NewGridWithColumns(2, saveButton, widget.NewButton("Close", func() {
 				modal.Hide()
-			}),
+			})),
 		)
 
-		modal = widget.NewModalPopUp(content, w.Canvas())
+		modal = widget.NewModalPopUp(container.NewPadded(content), w.Canvas())
+		modal.Resize(fyne.NewSize(420, 360))
 		modal.Show()
 
 		return nil
